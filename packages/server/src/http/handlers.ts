@@ -23,7 +23,7 @@ export const handlers = HttpApiBuilder.group(Api, "library", (group) =>
             llama: llamaState,
           }
         },
-        Effect.catchTag("LibraryError", () => new HttpApiError.InternalServerError()),
+        Effect.catchTag("EffectDrizzleQueryError", () => new HttpApiError.InternalServerError()),
       ),
     )
     .handle(
@@ -34,7 +34,7 @@ export const handlers = HttpApiBuilder.group(Api, "library", (group) =>
         },
         Effect.catchTags({
           ImportError: (error) => new ImportFailed({ reason: error.reason }),
-          LibraryError: () => new HttpApiError.InternalServerError(),
+          EffectDrizzleQueryError: () => new HttpApiError.InternalServerError(),
         }),
       ),
     )
@@ -47,7 +47,7 @@ export const handlers = HttpApiBuilder.group(Api, "library", (group) =>
         Effect.catchTags({
           LlamaUnavailable: () => new HttpApiError.ServiceUnavailable(),
           LlamaEmbedError: () => new HttpApiError.ServiceUnavailable(),
-          LibraryError: () => new HttpApiError.InternalServerError(),
+          EffectDrizzleQueryError: () => new HttpApiError.InternalServerError(),
         }),
       ),
     ),

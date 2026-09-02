@@ -1,8 +1,8 @@
 #!/usr/bin/env nub
 
-import { NodeRuntime, NodeServices } from "@effect/platform-node"
-import { Console, Effect, FileSystem, Path } from "effect"
-import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process"
+import { spawnSync } from "node:child_process"
+import { existsSync, mkdirSync, readdirSync } from "node:fs"
+import { join } from "node:path"
 
 type ReferenceRepository = {
   readonly name: string
@@ -17,67 +17,58 @@ const repositories = [
     directory: "effect",
     url: "https://github.com/Effect-TS/effect.git",
   },
+  {
+    name: "Drizzle ORM",
+    directory: "drizzle-orm",
+    url: "https://github.com/drizzle-team/drizzle-orm.git",
+    branch: "v1.0.0-rc.4",
+  },
 ] satisfies ReadonlyArray<ReferenceRepository>
 
 const referencesDir = "/tmp/references"
-const syncConcurrency = 2
 
-const inheritedGit = (args: ReadonlyArray<string>, cwd: string) =>
-  ChildProcess.make("git", args, {
-    cwd,
-    stdout: "inherit",
-    stderr: "inherit",
-    stdin: "inherit",
-  })
+const git = (args: ReadonlyArray<string>, cwd: string) => {
+  const result = spawnSync("git", args, { cwd, stdio: "inherit" })
+  if (result.error !== undefined) {
+    throw result.error
+  }
+  if (result.status !== 0) {
+    process.exit(result.status ?? 1)
+  }
+}
 
-const syncRepository = (repository: ReferenceRepository) =>
-  Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem
-    const path = yield* Path.Path
-    const spawner = yield* ChildProcessSpawner.ChildProcessSpawner
-    const repositoryPath = path.join(referencesDir, repository.directory)
-
-    const finish = (exitCode: ChildProcessSpawner.ExitCode) => {
-      if (exitCode !== ChildProcessSpawner.ExitCode(0)) {
-        process.exit(exitCode as number)
-      }
-    }
-
-    if (yield* fs.exists(repositoryPath)) {
-      yield* Console.log(`Pulling ${repository.name} updates...`)
-      finish(yield* spawner.exitCode(inheritedGit(["pull", "--ff-only"], repositoryPath)))
+const syncRepository = (repository: ReferenceRepository) => {
+  const repositoryPath = join(referencesDir, repository.directory)
+  if (existsSync(repositoryPath)) {
+    console.log(`Pulling ${repository.name} updates...`)
+    if (repository.branch !== undefined) {
+      git(["fetch", "--depth", "1", "origin", repository.branch], repositoryPath)
+      git(["checkout", "--force", "FETCH_HEAD"], repositoryPath)
       return
     }
-
-    yield* Console.log(`Cloning ${repository.name}...`)
-    const cloneArgs = ["clone", "--depth", "1"]
-    if (repository.branch) {
-      cloneArgs.push("--branch", repository.branch)
-    }
-    cloneArgs.push(repository.url, repository.directory)
-    finish(yield* spawner.exitCode(inheritedGit(cloneArgs, referencesDir)))
-  })
-
-const program = Effect.gen(function* () {
-  const fs = yield* FileSystem.FileSystem
-
-  yield* Console.log("Setting up /tmp/references/ directory...")
-  yield* fs.makeDirectory(referencesDir, { recursive: true })
-
-  yield* Effect.forEach(repositories, syncRepository, {
-    concurrency: syncConcurrency,
-    discard: true,
-  })
-
-  yield* Console.log("")
-  yield* Console.log("All reference repositories are up to date!")
-  yield* Console.log("")
-  yield* Console.log("Repositories:")
-
-  const entries = yield* fs.readDirectory(referencesDir)
-  for (const entry of [...entries].sort()) {
-    yield* Console.log(entry)
+    git(["pull", "--ff-only"], repositoryPath)
+    return
   }
-}).pipe(Effect.provide(NodeServices.layer))
 
-NodeRuntime.runMain(program)
+  console.log(`Cloning ${repository.name}...`)
+  const cloneArgs = ["clone", "--depth", "1"]
+  if (repository.branch !== undefined) {
+    cloneArgs.push("--branch", repository.branch)
+  }
+  cloneArgs.push(repository.url, repository.directory)
+  git(cloneArgs, referencesDir)
+}
+
+console.log("Setting up /tmp/references/ directory...")
+mkdirSync(referencesDir, { recursive: true })
+for (const repository of repositories) {
+  syncRepository(repository)
+}
+
+console.log("")
+console.log("All reference repositories are up to date!")
+console.log("")
+console.log("Repositories:")
+for (const entry of readdirSync(referencesDir).sort()) {
+  console.log(entry)
+}

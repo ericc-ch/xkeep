@@ -1,8 +1,8 @@
-x-bookmarks is a local X bookmarks library. Nub + Effect. Product shape is in `PLAN.md`.
+x-bookmarks is a local X bookmarks library. Nub + Effect. Product shape is in `docs/PLAN.md`.
 
 ## Architecture (directional)
 
-- **Server** — `packages/server`: Effect HTTP on localhost. sqlite, embed worker, `HttpApi`. v1 intake is a json file. No paid X API. No chrome extension in v1.
+- **Server** — `packages/server`: Effect HTTP on localhost. sqlite via Drizzle + `@effect/sql-sqlite-node`, embed worker, `HttpApi`. v1 intake is a json file. No paid X API. No chrome extension in v1.
 - **CLI** — `packages/cli`: HTTP client only (`import`, `search`). Imports `@x-bookmarks/server/api`.
 - **References sync** — `scripts/references.ts`: shallow-clones upstream sources into `/tmp/references/`.
 
@@ -17,10 +17,10 @@ For TypeScript style, follow the code-conventions skill.
 
 ## Workspace
 
-- `packages/server` — HTTP library process
+- `packages/server` — HTTP library process (`drizzle/` migrations, `db:generate`)
 - `packages/cli` — HTTP client
 - `scripts/` — install-time tooling (`references.ts`)
-- `PLAN.md` — product shape
+- `docs/PLAN.md` — product shape
 
 ## References Directory
 
@@ -32,3 +32,4 @@ Prefer exploring and reading this directory over searching for documentation. Th
 Available references:
 
 - effect — Effect (v4 on main)
+- drizzle-orm — Drizzle ORM (`v1.0.0-rc.4`)
