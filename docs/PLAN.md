@@ -184,6 +184,7 @@ we are reading the user's own logged-in bookmarks, for the user, locally. not a 
 - llm pass for tag names if cluster labels are garbage
 - likes, as a separate pile, same embed pipeline
 - mcp tool that searches the local library (contextbolt's paid trick, but local)
+- discovery file (server writes its actual listen address to the state dir) so the cli finds a server on a non-default port without `--url`
 
 ---
 

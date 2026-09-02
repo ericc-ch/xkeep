@@ -1,5 +1,6 @@
 import envPaths from "env-paths"
-import { Context, Data, Effect, Layer } from "effect"
+import { NodeFileSystem } from "@effect/platform-node"
+import { Context, Data, Effect, FileSystem, Layer, Schema } from "effect"
 
 const APP_NAME = "x-bookmarks"
 
@@ -19,16 +20,62 @@ export class ConfigError extends Data.TaggedError("ConfigError")<{
 }> {}
 
 const decodePort = (
+  key: string,
   raw: number | string | undefined,
   fallback: number,
 ): Effect.Effect<number, ConfigError> => {
   if (raw === undefined || raw === "") return Effect.succeed(fallback)
   const n = typeof raw === "number" ? raw : Number(raw)
   if (!Number.isInteger(n) || n < 1 || n > 65535) {
-    return Effect.fail(new ConfigError({ reason: `invalid port: ${String(raw)}` }))
+    return Effect.fail(new ConfigError({ reason: `invalid port for ${key}: ${String(raw)}` }))
   }
   return Effect.succeed(n)
 }
+
+const envValue = (key: string): string | undefined => {
+  const value = process.env[key]
+  return value === "" ? undefined : value
+}
+
+const ConfigFileSchema = Schema.Struct({
+  listen: Schema.optional(
+    Schema.Struct({
+      host: Schema.optional(Schema.String),
+      port: Schema.optional(Schema.Number),
+    }),
+  ),
+  paths: Schema.optional(
+    Schema.Struct({
+      data: Schema.optional(Schema.String),
+      cache: Schema.optional(Schema.String),
+    }),
+  ),
+  llama: Schema.optional(
+    Schema.Struct({
+      port: Schema.optional(Schema.Number),
+    }),
+  ),
+})
+
+const readConfigFile = Effect.fn("readConfigFile")(function* (configPath: string) {
+  const fs = yield* FileSystem.FileSystem
+  const exists = yield* fs.exists(configPath).pipe(
+    Effect.mapError(() => new ConfigError({ reason: `config file is not readable: ${configPath}` })),
+  )
+  if (!exists) return undefined
+  const raw = yield* fs.readFileString(configPath).pipe(
+    Effect.mapError(() => new ConfigError({ reason: `config file is not readable: ${configPath}` })),
+  )
+  const json: unknown = yield* Effect.try({
+    try: () => JSON.parse(raw),
+    catch: () => new ConfigError({ reason: `config file is not valid json: ${configPath}` }),
+  })
+  return yield* Schema.decodeUnknownEffect(ConfigFileSchema, { onExcessProperty: "error" })(json).pipe(
+    Effect.mapError(
+      (error) => new ConfigError({ reason: `config file ${configPath}: ${error.message}` }),
+    ),
+  )
+})
 
 export type AppConfigOverrides = {
   readonly host?: string | undefined
@@ -36,19 +83,30 @@ export type AppConfigOverrides = {
   readonly dataDir?: string | undefined
   readonly cacheDir?: string | undefined
   readonly llamaPort?: number | undefined
+  readonly configPath?: string | undefined
 }
 
 export class AppConfig extends Context.Service<AppConfig>()("AppConfig", {
   make: Effect.fn("AppConfig.make")(function* (overrides: AppConfigOverrides) {
     const paths = envPaths(APP_NAME, { suffix: "" })
-    const port = yield* decodePort(overrides.port ?? process.env.X_BOOKMARKS_PORT, HTTP_PORT_DEFAULT)
+    const configPath = overrides.configPath ?? `${paths.config}/config.json`
+    const file = yield* readConfigFile(configPath)
+    const port = yield* decodePort(
+      "listen.port",
+      overrides.port ?? envValue("X_BOOKMARKS_PORT") ?? file?.listen?.port,
+      HTTP_PORT_DEFAULT,
+    )
     const llamaPort = yield* decodePort(
-      overrides.llamaPort ?? process.env.X_BOOKMARKS_LLAMA_PORT,
+      "llama.port",
+      overrides.llamaPort ?? envValue("X_BOOKMARKS_LLAMA_PORT") ?? file?.llama?.port,
       LLAMA_PORT_DEFAULT,
     )
-    const host = overrides.host ?? process.env.X_BOOKMARKS_HOST ?? HTTP_HOST_DEFAULT
-    const dataDir = overrides.dataDir ?? process.env.X_BOOKMARKS_DATA_DIR ?? paths.data
-    const cacheDir = overrides.cacheDir ?? process.env.X_BOOKMARKS_CACHE_DIR ?? paths.cache
+    const host =
+      overrides.host ?? envValue("X_BOOKMARKS_HOST") ?? file?.listen?.host ?? HTTP_HOST_DEFAULT
+    const dataDir =
+      overrides.dataDir ?? envValue("X_BOOKMARKS_DATA_DIR") ?? file?.paths?.data ?? paths.data
+    const cacheDir =
+      overrides.cacheDir ?? envValue("X_BOOKMARKS_CACHE_DIR") ?? file?.paths?.cache ?? paths.cache
     const ggufDir = `${cacheDir}/gguf`
     return {
       host,
@@ -67,7 +125,8 @@ export class AppConfig extends Context.Service<AppConfig>()("AppConfig", {
     } as const
   }),
 }) {
-  static layer = (overrides: AppConfigOverrides) => Layer.effect(this, this.make(overrides))
+  static layer = (overrides: AppConfigOverrides) =>
+    Layer.effect(this, this.make(overrides)).pipe(Layer.provide(NodeFileSystem.layer))
 }
 
 export const llamaTarballName = (os: NodeJS.Platform): string | undefined => {

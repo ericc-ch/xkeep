@@ -24,7 +24,7 @@ const e2eLayer = Layer.mergeAll(handlers, drainLayer).pipe(
   Layer.provide(libraryLayer),
   Layer.provide(llamaLayerTest),
   Layer.provide(NodeHttpClient.layerNodeHttp),
-  Layer.provide(AppConfig.layer({ dataDir })),
+  Layer.provide(AppConfig.layer({ dataDir, configPath: `${dataDir}/config.json` })),
   Layer.provideMerge(NodeHttpServer.layerHttpServices),
 )
 
@@ -131,7 +131,7 @@ describe.sequential("library HttpApi", () => {
     }).pipe(
       Layer.provide(libraryLayer),
       Layer.provide(llamaLayerTest),
-      Layer.provide(AppConfig.layer({ dataDir })),
+      Layer.provide(AppConfig.layer({ dataDir, configPath: `${dataDir}/config.json` })),
       Layer.provideMerge(NodeHttpServer.layerTest),
     )
     await Effect.runPromise(
