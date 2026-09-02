@@ -12,13 +12,15 @@ the whole product is an `npx` server. ui, sqlite, embeddings, canvas, tags. inta
 
 x bookmarks are a graveyard. native search is exact-text only. the official archive download skips bookmarks. the public api caps you at 800 and costs money.
 
-this is for one person (erick), on gl503ge (intel arc). qwen3-vl-embedding already runs there.
+this is for one person (erick), on gl503ge (i7-8750h) + arc b580. qwen3-vl-embedding already runs there.
 
 ## wedge
 
 pieces exist. this combo does not:
 
-local **qwen3-vl-embedding** (tweet text + images in one space) + **cluster canvas** + **no saas**.
+local **qwen3-vl-embedding** (tweet text + first still in one fused vector, nothing leaves the machine) + **cluster canvas** + **no saas**.
+
+one backend: **qwen3-vl-embedding-2b** through official vulkan `llama-server` (GGUF Q4_K_M + mmproj Q8_0). jina-clip-v2 was measured and dropped (separate text/image spaces, cc by-nc). python is not in the product path.
 
 everybody else is some mix of: paid x api, sending text to their cloud, keyword-only, or a chrome store listing with a 150-item free cap.
 
@@ -66,7 +68,7 @@ add a userscript or thin extension only when the re-export ritual starts to suck
 3. drop the file. embedding starts in the background.
 4. search works first. canvas is one click away on the same vectors.
 
-foss people will tolerate a model download. they will not tolerate clone / venv / drivers / then maybe it captures. `npx` is the install. gpu drivers are a one-time host problem (already done on gl503ge).
+foss people will tolerate a first-run GGUF + llama-server download. they will not tolerate clone / venv / drivers / then maybe it captures. `npx` is the install. gpu drivers are a one-time host problem (already done on gl503ge).
 
 do not make chrome-extension storage the library. even with `unlimitedStorage`, that's a browser profile, not a folder you rsync. uninstall wipes it.
 
@@ -88,9 +90,7 @@ in:
 - shadow-copy: x still has them. we never unbookmark
 - file intake (bookmarklet + console snippet + drag-drop). incremental import, dedupe on tweet id
 - sqlite + media dir on disk, default `~/.local/share/<name>/`
-- qwen3-vl-embedding-2b on gl503ge / intel arc, whatever stack already runs there (likely openvino/ipex; llama.cpp sycl still chokes the vision encoder)
-- matryoshka: store 512 or 1024 dims, not full 2048/4096
-- embed tweet text plus images / video thumbs so memes and papers actually separate
+- embed: `Qwen/Qwen3-VL-Embedding-2B` via official vulkan `llama-server` (b10752). fused text+first-still vector, 2048-d stored
 - search is the front door (semantic + keyword)
 - filters: author, media type (text / image / video / article / link), date, tags
 - auto tags from clusters. manual override. no llm pass
@@ -119,7 +119,7 @@ npx <name>  =  http server on localhost
                ├── spa (search, filters, tags, canvas)
                ├── sqlite (tweets, users, tags, vectors)
                ├── media/ (optional local copies, urls always stored)
-               └── embed worker (qwen3-vl-embedding on arc)
+               └── embed worker (llama-server child; drain loop until sqlite vectors catch up)
 ```
 
 the server is the product. the browser tab is just the window (`http://127.0.0.1:<port>`). not a `chrome-extension://` page.
@@ -134,7 +134,7 @@ source of truth is files:
 ~/.local/share/<name>/
   library.sqlite
   media/
-  models/          # or reuse the existing hf/openvino cache
+  models/          # unused; GGUF lives in the cache dir
   imports/         # raw json drops, keep them
 ```
 
@@ -146,16 +146,15 @@ backup = rsync that folder. that's the point of not living in chrome.
 
 ### embedding
 
-- model: `Qwen/Qwen3-VL-Embedding-2B`
-- instruction-aware, multimodal, mrl
-- input: text + images (and video thumbs if cheap). one vector per bookmark
-- dim: 512 or 1024 stored
-- batch in the background after import. ui stays usable on keyword/filters while vectors catch up
-- cluster (hdbscan or similar) after a batch; auto tags are cluster labels you can rename
-- search: query text (and later an image) → embedding → cosine knn, then filters as metadata pre/post cut
-- canvas: 2d projection of the same vectors. search can highlight a neighborhood instead of a list
+one backend. validated on gl503ge (2026-09-02). see `docs/adrs/0001-qwen-llamacpp-vulkan.md`.
 
-if vl export/runtime is annoying on a given week, text-only `Qwen3-Embedding-0.6B` via openvino is a documented fallback. v1 should still try vl first; that's the wedge.
+- `Qwen3-VL-Embedding-2B` GGUF Q4_K_M + mmproj Q8_0 through official `llama-server` vulkan (pinned b10752)
+- use PATH `llama-server` if present, else fetch the pinned build into cache
+- one fused vector per bookmark (text + first still). store 2048-d
+- `--embedding --pooling last --embd-normalize 2`; image cap 256 tokens; prompt cache off
+- drain loop in the app process: wait until llama is ready, embed rows with a null blob, retry after errors
+- search: query text → embedding → brute-force cosine over an in-memory matrix. no vector index in v1
+- canvas: 2d projection of the same vectors later. search can highlight a neighborhood instead of a list
 
 ### ui
 
@@ -198,17 +197,19 @@ working folder on gl503ge: `~/projects/x-bookmarks/`
 
 ## locked decisions
 
-| thing | call |
-| --- | --- |
-| paid x api | no |
-| v1 surface | npx server + file intake |
-| extension | not v1 |
-| storage | sqlite on disk, not chrome |
-| machine | gl503ge, intel arc |
-| model | qwen3-vl-embedding-2b, mrl 512/1024 |
-| x bookmarks | shadow-copy, never delete |
-| scope | bookmarks only |
-| tags | clusters + manual, no llm |
-| home screen | search, not canvas |
-| network | localhost |
-
+| thing          | call                                                                                          |
+| -------------- | --------------------------------------------------------------------------------------------- |
+| paid x api     | no                                                                                            |
+| v1 surface     | npx server + file intake                                                                      |
+| extension      | not v1                                                                                        |
+| storage        | sqlite on disk, not chrome                                                                    |
+| machine        | gl503ge (i7-8750h) + arc b580                                                                 |
+| model          | qwen3-vl-embedding-2b via official vulkan llama-server (b10752, Q4_K_M + mmproj Q8_0, 2048-d) |
+| python         | not in the product path. llama.cpp binary + GGUF only                                         |
+| ollama         | ruled out — /api/embed is text-only (ollama#5304 open)                                        |
+| llama.cpp gguf | pinned b10752; `--embedding --pooling last --embd-normalize 2`; image cap 256 tokens          |
+| x bookmarks    | shadow-copy, never delete                                                                     |
+| scope          | bookmarks only                                                                                |
+| tags           | clusters + manual, no llm                                                                     |
+| home screen    | search, not canvas                                                                            |
+| network        | localhost                                                                                     |

@@ -2,16 +2,16 @@
   "name": "x-bookmarks",
   "version": "0.0.0",
   "private": true,
-  "bin": {
-    "x-bookmarks": "./src/main.ts"
-  },
+  "workspaces": [
+    "packages/*"
+  ],
   "type": "module",
   "scripts": {
-    "check": "bun run typecheck && bun run test && bun run lint",
+    "check": "nub run typecheck && nub run test && nub run lint",
     "format": "oxfmt",
     "lint": "oxlint --fix",
-    "prepare": "simple-git-hooks && effect-language-service patch && bun scripts/references.ts",
-    "start": "bun src/main.ts",
+    "prepare": "effect-language-service patch && nub scripts/references.ts",
+    "start": "nub run --filter @x-bookmarks/server start",
     "test": "vitest run",
     "typecheck": "tsc -b"
   },
@@ -21,15 +21,17 @@
   },
   "devDependencies": {
     "@effect/language-service": "^0.87.1",
-    "@types/bun": "^1.3.14",
+    "@types/node": "^24.10.1",
     "oxfmt": "^0.61.0",
     "oxlint": "^1.76.0",
-    "simple-git-hooks": "^2.13.1",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10"
   },
-  "simple-git-hooks": {
-    "pre-commit": "bun run check"
-  },
-  "packageManager": "bun@1.3.14"
+  "devEngines": {
+    "packageManager": {
+      "name": "nub",
+      "version": "^0.8.2",
+      "onFail": "ignore"
+    }
+  }
 }

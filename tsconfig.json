@@ -1,6 +1,10 @@
 {
   "files": [],
-  "references": [{ "path": "./tsconfig.src.json" }, { "path": "./tsconfig.tools.json" }],
+  "references": [
+    { "path": "./packages/server" },
+    { "path": "./packages/cli" },
+    { "path": "./tsconfig.tools.json" }
+  ],
 
   "compilerOptions": {
     "target": "ESNext",

@@ -5,6 +5,6 @@
 
   "compilerOptions": {
     "composite": true,
-    "types": ["bun"]
+    "types": ["node"]
   }
 }

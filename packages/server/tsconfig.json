@@ -1,13 +1,12 @@
 {
-  "extends": "./tsconfig.json",
-  "include": ["./src/"],
-
+  "extends": "../../tsconfig.json",
+  "include": ["./src/", "./test/"],
   "compilerOptions": {
     "composite": true,
     "lib": ["ESNext"],
     "module": "Preserve",
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
-    "types": ["bun"]
+    "types": ["node"]
   }
 }

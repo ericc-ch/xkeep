@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
-import { parseBookmarksFromGraphql, parseDump } from "./parse-graphql.ts"
+import { Exit, Schema } from "effect"
+import { BookmarkDump, parseBookmarksFromGraphql } from "./parse-graphql.ts"
 
 const photoTweet = {
   __typename: "Tweet",
@@ -173,24 +174,61 @@ describe("parseBookmarksFromGraphql", () => {
   })
 })
 
-describe("parseDump", () => {
+describe("BookmarkDump", () => {
   it("accepts a v1 dump object", () => {
     const bookmarks = parseBookmarksFromGraphql([graphqlPage])
-    const parsed = parseDump({
+    const parsed = Schema.decodeUnknownExit(BookmarkDump)({
       schema: "x-bookmarks-dump/1",
       source: "bookmark",
       captured_at: "2026-09-01T00:00:00.000Z",
       bookmarks,
       raw_pages: [graphqlPage],
     })
-    expect(parsed._tag).toBe("ok")
-    if (parsed._tag !== "ok") return
+    expect(Exit.isSuccess(parsed)).toBe(true)
+    if (!Exit.isSuccess(parsed)) return
     expect(parsed.value.bookmarks).toHaveLength(3)
     expect(parsed.value.raw_pages).toHaveLength(1)
   })
 
   it("rejects a missing schema", () => {
-    const parsed = parseDump({ bookmarks: [] })
-    expect(parsed._tag).toBe("err")
+    const parsed = Schema.decodeUnknownExit(BookmarkDump)({ bookmarks: [] })
+    expect(Exit.isFailure(parsed)).toBe(true)
+  })
+
+  it("rejects path-like captured_at and ids", () => {
+    expect(
+      Exit.isFailure(
+        Schema.decodeUnknownExit(BookmarkDump)({
+          schema: "x-bookmarks-dump/1",
+          source: "bookmark",
+          captured_at: "../../passwd",
+          bookmarks: [],
+          raw_pages: [],
+        }),
+      ),
+    ).toBe(true)
+    expect(
+      Exit.isFailure(
+        Schema.decodeUnknownExit(BookmarkDump)({
+          schema: "x-bookmarks-dump/1",
+          source: "bookmark",
+          captured_at: "2026-09-01T00:00:00.000Z",
+          bookmarks: [
+            {
+              id: "../evil",
+              author: "x",
+              handle: "x",
+              avatar: "",
+              timestamp: "",
+              text: "",
+              media: [],
+              hashtags: [],
+              urls: [],
+            },
+          ],
+          raw_pages: [],
+        }),
+      ),
+    ).toBe(true)
   })
 })

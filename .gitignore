@@ -4,3 +4,4 @@ dist/
 result
 .direnv/
 *.log
+x-bookmarks-dump.json

@@ -1,29 +1,23 @@
+import { Schema } from "effect"
+
 export const DUMP_SCHEMA = "x-bookmarks-dump/1" as const
 
-export class DumpParseError extends Error {
-  readonly _tag = "DumpParseError" as const
-  readonly reason: string
+export const TweetId = Schema.String.check(Schema.isPattern(/^[0-9]{6,32}$/))
 
-  constructor(reason: string) {
-    super(reason)
-    this.reason = reason
-  }
-}
+export const CapturedAt = Schema.String.check(
+  Schema.isPattern(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/),
+)
 
-export type DumpParseResult<T> =
-  | { readonly _tag: "ok"; readonly value: T }
-  | { readonly _tag: "err"; readonly error: DumpParseError }
+export const Media = Schema.Struct({
+  type: Schema.Literals(["photo", "video", "gif"]),
+  url: Schema.String.check(Schema.isNonEmpty()),
+  poster: Schema.optionalKey(Schema.String.check(Schema.isNonEmpty())),
+})
 
-export type MediaType = "photo" | "video" | "gif"
+export type Media = typeof Media.Type
 
-export type Media = {
-  readonly type: MediaType
-  readonly url: string
-  readonly poster?: string
-}
-
-export type Bookmark = {
-  readonly id: string
+export interface Bookmark {
+  readonly id: typeof TweetId.Type
   readonly author: string
   readonly handle: string
   readonly avatar: string
@@ -35,19 +29,28 @@ export type Bookmark = {
   readonly quoted?: Bookmark
 }
 
-export type BookmarkDump = {
-  readonly schema: typeof DUMP_SCHEMA
-  readonly source: "bookmark"
-  readonly captured_at: string
-  readonly bookmarks: ReadonlyArray<Bookmark>
-  readonly raw_pages: ReadonlyArray<unknown>
-}
-
-const ok = <T>(value: T): DumpParseResult<T> => ({ _tag: "ok", value })
-const err = (reason: string): DumpParseResult<never> => ({
-  _tag: "err",
-  error: new DumpParseError(reason),
+export const Bookmark: Schema.Codec<Bookmark> = Schema.Struct({
+  id: TweetId,
+  author: Schema.String,
+  handle: Schema.String,
+  avatar: Schema.String,
+  timestamp: Schema.String,
+  text: Schema.String,
+  media: Schema.Array(Media),
+  hashtags: Schema.Array(Schema.String),
+  urls: Schema.Array(Schema.String),
+  quoted: Schema.optionalKey(Schema.suspend((): Schema.Codec<Bookmark> => Bookmark)),
 })
+
+export const BookmarkDump = Schema.Struct({
+  schema: Schema.Literal(DUMP_SCHEMA),
+  source: Schema.Literal("bookmark"),
+  captured_at: CapturedAt,
+  bookmarks: Schema.Array(Bookmark),
+  raw_pages: Schema.Array(Schema.Unknown),
+})
+
+export type BookmarkDump = typeof BookmarkDump.Type
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value)
@@ -72,7 +75,9 @@ const isTweetRecord = (value: unknown): value is Record<string, unknown> => {
   return isRecord(tweet.legacy)
 }
 
-const userFields = (tweet: Record<string, unknown>): { author: string; handle: string; avatar: string } => {
+const userFields = (
+  tweet: Record<string, unknown>,
+): { author: string; handle: string; avatar: string } => {
   const core = isRecord(tweet.core) ? tweet.core : undefined
   const userResults = core && isRecord(core.user_results) ? core.user_results : undefined
   const user = userResults && isRecord(userResults.result) ? userResults.result : undefined
@@ -114,7 +119,7 @@ const parseMediaList = (tweet: Record<string, unknown>): ReadonlyArray<Media> =>
     const thumb = asString(item.media_url_https)
     if (item.type === "video" || item.type === "animated_gif") {
       const mp4 = bestMp4(item)
-      const type: MediaType = item.type === "animated_gif" ? "gif" : "video"
+      const type: Media["type"] = item.type === "animated_gif" ? "gif" : "video"
       if (mp4 && thumb) {
         media.push({ type, url: mp4, poster: thumb })
         continue
@@ -135,19 +140,26 @@ const parseHashtags = (tweet: Record<string, unknown>): ReadonlyArray<string> =>
   const legacy = isRecord(tweet.legacy) ? tweet.legacy : {}
   const entities = isRecord(legacy.entities) ? legacy.entities : undefined
   const tags = Array.isArray(entities?.hashtags) ? entities.hashtags : []
-  return tags.filter(isRecord).map((tag) => asString(tag.text)).filter(Boolean)
+  return tags
+    .filter(isRecord)
+    .map((tag) => asString(tag.text))
+    .filter(Boolean)
 }
 
 const parseUrls = (tweet: Record<string, unknown>): ReadonlyArray<string> => {
   const legacy = isRecord(tweet.legacy) ? tweet.legacy : {}
   const entities = isRecord(legacy.entities) ? legacy.entities : undefined
   const urls = Array.isArray(entities?.urls) ? entities.urls : []
-  return urls.filter(isRecord).map((url) => asString(url.expanded_url)).filter(Boolean)
+  return urls
+    .filter(isRecord)
+    .map((url) => asString(url.expanded_url))
+    .filter(Boolean)
 }
 
 const tweetText = (tweet: Record<string, unknown>): string => {
   const note = isRecord(tweet.note_tweet) ? tweet.note_tweet : undefined
-  const noteResults = note && isRecord(note.note_tweet_results) ? note.note_tweet_results : undefined
+  const noteResults =
+    note && isRecord(note.note_tweet_results) ? note.note_tweet_results : undefined
   const noteInner = noteResults && isRecord(noteResults.result) ? noteResults.result : undefined
   const noteText = asString(noteInner?.text)
   if (noteText) return noteText
@@ -171,7 +183,9 @@ const toBookmark = (tweet: Record<string, unknown>, quoteDepth: number): Bookmar
     urls: parseUrls(unwrapped),
   }
   if (quoteDepth > 0) return bookmark
-  const quotedWrap = isRecord(unwrapped.quoted_status_result) ? unwrapped.quoted_status_result : undefined
+  const quotedWrap = isRecord(unwrapped.quoted_status_result)
+    ? unwrapped.quoted_status_result
+    : undefined
   const quotedRaw = quotedWrap?.result
   if (isTweetRecord(quotedRaw)) {
     return { ...bookmark, quoted: toBookmark(quotedRaw, quoteDepth + 1) }
@@ -179,7 +193,11 @@ const toBookmark = (tweet: Record<string, unknown>, quoteDepth: number): Bookmar
   return bookmark
 }
 
-const collectFromTweetResults = (value: unknown, depth: number, acc: { seen: Set<string>; out: Array<Bookmark> }): void => {
+const collectFromTweetResults = (
+  value: unknown,
+  depth: number,
+  acc: { seen: Set<string>; out: Array<Bookmark> },
+): void => {
   if (!value || typeof value !== "object" || depth > 16) return
   if (Array.isArray(value)) {
     for (const item of value) collectFromTweetResults(item, depth + 1, acc)
@@ -199,65 +217,10 @@ const collectFromTweetResults = (value: unknown, depth: number, acc: { seen: Set
   }
 }
 
-export const parseBookmarksFromGraphql = (pages: ReadonlyArray<unknown>): ReadonlyArray<Bookmark> => {
+export const parseBookmarksFromGraphql = (
+  pages: ReadonlyArray<unknown>,
+): ReadonlyArray<Bookmark> => {
   const acc = { seen: new Set<string>(), out: [] as Array<Bookmark> }
   for (const page of pages) collectFromTweetResults(page, 0, acc)
   return acc.out
-}
-
-const parseMedia = (value: unknown): Media | undefined => {
-  if (!isRecord(value)) return undefined
-  if (value.type !== "photo" && value.type !== "video" && value.type !== "gif") return undefined
-  if (typeof value.url !== "string" || value.url.length === 0) return undefined
-  if (typeof value.poster === "string") return { type: value.type, url: value.url, poster: value.poster }
-  return { type: value.type, url: value.url }
-}
-
-const parseBookmark = (value: unknown): Bookmark | undefined => {
-  if (!isRecord(value)) return undefined
-  if (typeof value.id !== "string" || value.id.length === 0) return undefined
-  const mediaRaw = Array.isArray(value.media) ? value.media : []
-  const media = mediaRaw.map(parseMedia).filter((item): item is Media => item !== undefined)
-  const hashtags = Array.isArray(value.hashtags)
-    ? value.hashtags.filter((tag): tag is string => typeof tag === "string")
-    : []
-  const urls = Array.isArray(value.urls)
-    ? value.urls.filter((url): url is string => typeof url === "string")
-    : []
-  const quoted = value.quoted === undefined ? undefined : parseBookmark(value.quoted)
-  const bookmark: Bookmark = {
-    id: value.id,
-    author: asString(value.author) || "Unknown",
-    handle: asString(value.handle) || "unknown",
-    avatar: asString(value.avatar),
-    timestamp: asString(value.timestamp),
-    text: asString(value.text),
-    media,
-    hashtags,
-    urls,
-  }
-  if (quoted) return { ...bookmark, quoted }
-  return bookmark
-}
-
-export const parseDump = (value: unknown): DumpParseResult<BookmarkDump> => {
-  if (!isRecord(value)) return err("dump is not an object")
-  if (value.schema !== DUMP_SCHEMA) return err("unsupported dump schema")
-  if (value.source !== "bookmark") return err("unsupported dump source")
-  if (typeof value.captured_at !== "string") return err("captured_at missing")
-  if (!Array.isArray(value.bookmarks)) return err("bookmarks missing")
-  const bookmarks: Array<Bookmark> = []
-  for (const item of value.bookmarks) {
-    const bookmark = parseBookmark(item)
-    if (!bookmark) return err("bookmark row failed to parse")
-    bookmarks.push(bookmark)
-  }
-  const raw_pages = Array.isArray(value.raw_pages) ? value.raw_pages : []
-  return ok({
-    schema: DUMP_SCHEMA,
-    source: "bookmark",
-    captured_at: value.captured_at,
-    bookmarks,
-    raw_pages,
-  })
 }
