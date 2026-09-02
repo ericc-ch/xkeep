@@ -99,13 +99,13 @@ describe("AppConfig config file", () => {
       const dir = makeConfigDir()
       try {
         const configPath = writeConfig(dir, {
-          listen: { port: 9000 },
+          listen: { host: "127.0.0.2", port: 9000 },
           paths: { data: "/tmp/cfg-data", cache: "/tmp/cfg-cache" },
           llama: { port: 9001 },
         })
         const config = await load({ configPath })
         expect(config).toEqual({
-          host: "127.0.0.1",
+          host: "127.0.0.2",
           port: 9000,
           llamaPort: 9001,
           dataDir: "/tmp/cfg-data",
@@ -222,6 +222,87 @@ describe("AppConfig config file", () => {
         const reason = await failureReason({ configPath })
         expect(reason).toContain("listen.port")
         expect(reason).toContain("70000")
+      } finally {
+        rmSync(dir, { recursive: true, force: true })
+      }
+    })
+  })
+
+  it("fails on a string port from the file", async () => {
+    await withEnv({}, async () => {
+      const dir = makeConfigDir()
+      try {
+        const configPath = writeConfig(dir, { listen: { port: "8787" } })
+        const reason = await failureReason({ configPath })
+        expect(reason).toContain('["listen"]["port"]')
+      } finally {
+        rmSync(dir, { recursive: true, force: true })
+      }
+    })
+  })
+
+  it("fails naming the key for an invalid env port", async () => {
+    await withEnv({ X_BOOKMARKS_PORT: "abc" }, async () => {
+      const dir = makeConfigDir()
+      try {
+        const reason = await failureReason({ configPath: join(dir, "missing.json") })
+        expect(reason).toContain("listen.port")
+        expect(reason).toContain("abc")
+      } finally {
+        rmSync(dir, { recursive: true, force: true })
+      }
+    })
+  })
+
+  it("fails on a blank host from the file", async () => {
+    await withEnv({}, async () => {
+      const dir = makeConfigDir()
+      try {
+        for (const host of ["", "   "]) {
+          const configPath = writeConfig(dir, { listen: { host } })
+          const reason = await failureReason({ configPath })
+          expect(reason).toContain("listen.host")
+        }
+      } finally {
+        rmSync(dir, { recursive: true, force: true })
+      }
+    })
+  })
+
+  it("fails on a blank data dir from the file", async () => {
+    await withEnv({}, async () => {
+      const dir = makeConfigDir()
+      try {
+        const configPath = writeConfig(dir, { paths: { data: "" } })
+        const reason = await failureReason({ configPath })
+        expect(reason).toContain("paths.data")
+      } finally {
+        rmSync(dir, { recursive: true, force: true })
+      }
+    })
+  })
+
+  it("fails on a blank cache dir from a flag", async () => {
+    await withEnv({}, async () => {
+      const dir = makeConfigDir()
+      try {
+        const reason = await failureReason({
+          configPath: join(dir, "missing.json"),
+          cacheDir: "  ",
+        })
+        expect(reason).toContain("paths.cache")
+      } finally {
+        rmSync(dir, { recursive: true, force: true })
+      }
+    })
+  })
+
+  it("fails when the config path is not readable", async () => {
+    await withEnv({}, async () => {
+      const dir = makeConfigDir()
+      try {
+        const reason = await failureReason({ configPath: dir })
+        expect(reason).toContain("not readable")
       } finally {
         rmSync(dir, { recursive: true, force: true })
       }

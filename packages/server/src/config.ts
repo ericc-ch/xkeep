@@ -24,12 +24,26 @@ const decodePort = (
   raw: number | string | undefined,
   fallback: number,
 ): Effect.Effect<number, ConfigError> => {
-  if (raw === undefined || raw === "") return Effect.succeed(fallback)
+  if (raw === undefined) return Effect.succeed(fallback)
   const n = typeof raw === "number" ? raw : Number(raw)
   if (!Number.isInteger(n) || n < 1 || n > 65535) {
     return Effect.fail(new ConfigError({ reason: `invalid port for ${key}: ${String(raw)}` }))
   }
   return Effect.succeed(n)
+}
+
+const decodeNonBlank = (
+  key: string,
+  raw: string | undefined,
+  fallback: string,
+): Effect.Effect<string, ConfigError> => {
+  if (raw === undefined) return Effect.succeed(fallback)
+  if (raw.trim() === "") {
+    return Effect.fail(
+      new ConfigError({ reason: `invalid value for ${key}: must be a non-blank string` }),
+    )
+  }
+  return Effect.succeed(raw)
 }
 
 const envValue = (key: string): string | undefined => {
@@ -101,12 +115,21 @@ export class AppConfig extends Context.Service<AppConfig>()("AppConfig", {
       overrides.llamaPort ?? envValue("X_BOOKMARKS_LLAMA_PORT") ?? file?.llama?.port,
       LLAMA_PORT_DEFAULT,
     )
-    const host =
-      overrides.host ?? envValue("X_BOOKMARKS_HOST") ?? file?.listen?.host ?? HTTP_HOST_DEFAULT
-    const dataDir =
-      overrides.dataDir ?? envValue("X_BOOKMARKS_DATA_DIR") ?? file?.paths?.data ?? paths.data
-    const cacheDir =
-      overrides.cacheDir ?? envValue("X_BOOKMARKS_CACHE_DIR") ?? file?.paths?.cache ?? paths.cache
+    const host = yield* decodeNonBlank(
+      "listen.host",
+      overrides.host ?? envValue("X_BOOKMARKS_HOST") ?? file?.listen?.host,
+      HTTP_HOST_DEFAULT,
+    )
+    const dataDir = yield* decodeNonBlank(
+      "paths.data",
+      overrides.dataDir ?? envValue("X_BOOKMARKS_DATA_DIR") ?? file?.paths?.data,
+      paths.data,
+    )
+    const cacheDir = yield* decodeNonBlank(
+      "paths.cache",
+      overrides.cacheDir ?? envValue("X_BOOKMARKS_CACHE_DIR") ?? file?.paths?.cache,
+      paths.cache,
+    )
     const ggufDir = `${cacheDir}/gguf`
     return {
       host,
