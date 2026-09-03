@@ -51,25 +51,129 @@ const envValue = (key: string): string | undefined => {
   return value === "" ? undefined : value
 }
 
+const NonBlankString = Schema.String.check(
+  Schema.makeFilter((value: string) => value.trim() !== "", { expected: "a non-blank string" }),
+)
+
+const Port = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 65535 })).pipe(
+  Schema.annotate({
+    title: "Port",
+    description: "TCP port from 1 to 65535.",
+  }),
+)
+
 const ConfigFileSchema = Schema.Struct({
   listen: Schema.optional(
     Schema.Struct({
-      host: Schema.optional(Schema.String),
-      port: Schema.optional(Schema.Number),
-    }),
+      host: Schema.optional(
+        Schema.String.pipe(
+          Schema.annotateKey({ description: "HTTP bind host. Omitted uses 127.0.0.1." }),
+        ),
+      ),
+      port: Schema.optional(
+        Schema.Number.pipe(
+          Schema.annotateKey({ description: "HTTP listen port. Omitted uses 8787." }),
+        ),
+      ),
+    }).pipe(
+      Schema.annotate({
+        title: "Listen",
+        description: "HTTP bind address for the library server.",
+      }),
+    ),
   ),
   paths: Schema.optional(
     Schema.Struct({
-      data: Schema.optional(Schema.String),
-      cache: Schema.optional(Schema.String),
-    }),
+      data: Schema.optional(
+        Schema.String.pipe(
+          Schema.annotateKey({
+            description: "Directory for sqlite, media, and imports. Omitted uses env-paths data.",
+          }),
+        ),
+      ),
+      cache: Schema.optional(
+        Schema.String.pipe(
+          Schema.annotateKey({
+            description: "Directory for llama binaries and GGUF files. Omitted uses env-paths cache.",
+          }),
+        ),
+      ),
+    }).pipe(
+      Schema.annotate({
+        title: "Paths",
+        description: "On-disk directories for library data and download cache.",
+      }),
+    ),
   ),
   llama: Schema.optional(
     Schema.Struct({
-      port: Schema.optional(Schema.Number),
-    }),
+      port: Schema.optional(
+        Schema.Number.pipe(
+          Schema.annotateKey({ description: "llama-server port. Omitted uses 8913." }),
+        ),
+      ),
+    }).pipe(
+      Schema.annotate({
+        title: "Llama",
+        description: "Local llama.cpp embed worker.",
+      }),
+    ),
   ),
-})
+}).pipe(
+  Schema.annotate({
+    identifier: "ConfigFile",
+    title: "Config file",
+    description:
+      "Optional JSON at the env-paths config dir. Nested keys only. Unknown keys fail boot.",
+  }),
+)
+
+export const ResolvedConfigSchema = Schema.Struct({
+  host: NonBlankString.pipe(
+    Schema.annotateKey({ description: "HTTP bind host after flags, env, file, and defaults." }),
+  ),
+  port: Port.pipe(Schema.annotateKey({ description: "HTTP listen port after merge." })),
+  dataDir: NonBlankString.pipe(
+    Schema.annotateKey({ description: "Library data directory after merge." }),
+  ),
+  cacheDir: NonBlankString.pipe(
+    Schema.annotateKey({ description: "Download cache directory after merge." }),
+  ),
+  llamaPort: Port.pipe(Schema.annotateKey({ description: "llama-server port after merge." })),
+  sqlitePath: NonBlankString.pipe(
+    Schema.annotateKey({ description: "SQLite file derived from dataDir." }),
+  ),
+  mediaDir: NonBlankString.pipe(
+    Schema.annotateKey({ description: "Still-image directory derived from dataDir." }),
+  ),
+  importsDir: NonBlankString.pipe(
+    Schema.annotateKey({ description: "Imported dump directory derived from dataDir." }),
+  ),
+  llamaDir: NonBlankString.pipe(
+    Schema.annotateKey({ description: "Pinned llama.cpp extract directory derived from cacheDir." }),
+  ),
+  ggufDir: NonBlankString.pipe(
+    Schema.annotateKey({ description: "GGUF download directory derived from cacheDir." }),
+  ),
+  textGgufPath: NonBlankString.pipe(
+    Schema.annotateKey({ description: "Text embedding GGUF path under ggufDir." }),
+  ),
+  mmprojGgufPath: NonBlankString.pipe(
+    Schema.annotateKey({ description: "mmproj GGUF path under ggufDir." }),
+  ),
+  llamaBaseUrl: NonBlankString.pipe(
+    Schema.annotateKey({ description: "http://127.0.0.1:{llamaPort} for the embed worker." }),
+  ),
+}).pipe(
+  Schema.annotate({
+    identifier: "ResolvedConfig",
+    title: "Resolved config",
+    description:
+      "Runtime config after flags, env, file, and defaults. Derived paths are included. Module constants are not.",
+  }),
+)
+
+export type ResolvedConfig = typeof ResolvedConfigSchema.Type
 
 const readConfigFile = Effect.fn("readConfigFile")(function* (configPath: string) {
   const fs = yield* FileSystem.FileSystem
@@ -100,7 +204,7 @@ export type AppConfigOverrides = {
   readonly configPath?: string | undefined
 }
 
-export class AppConfig extends Context.Service<AppConfig>()("AppConfig", {
+export class AppConfig extends Context.Service<AppConfig, ResolvedConfig>()("AppConfig", {
   make: Effect.fn("AppConfig.make")(function* (overrides: AppConfigOverrides) {
     const paths = envPaths(APP_NAME, { suffix: "" })
     const configPath = overrides.configPath ?? `${paths.config}/config.json`
@@ -131,7 +235,7 @@ export class AppConfig extends Context.Service<AppConfig>()("AppConfig", {
       paths.cache,
     )
     const ggufDir = `${cacheDir}/gguf`
-    return {
+    return yield* Schema.decodeUnknownEffect(ResolvedConfigSchema, { onExcessProperty: "error" })({
       host,
       port,
       dataDir,
@@ -145,7 +249,11 @@ export class AppConfig extends Context.Service<AppConfig>()("AppConfig", {
       textGgufPath: `${ggufDir}/qwen3-vl-embedding-2b-Q4_K_M.gguf`,
       mmprojGgufPath: `${ggufDir}/mmproj-Q8_0.gguf`,
       llamaBaseUrl: `http://127.0.0.1:${String(llamaPort)}`,
-    } as const
+    }).pipe(
+      Effect.mapError(
+        (error) => new ConfigError({ reason: `resolved config invalid: ${error.message}` }),
+      ),
+    )
   }),
 }) {
   static layer = (overrides: AppConfigOverrides) =>
