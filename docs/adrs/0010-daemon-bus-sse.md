@@ -21,7 +21,7 @@ Inspiration: anomalyco/opencode (v2). Two layers there are easy to conflate:
 
 x-bookmarks is not a chat transcript. Cluster renames, tags, imports, and embed progress do not need replayable aggregates or rebuilding the DB from a log. Full event sourcing (every mutation is an event, tables are projections) is rejected for v1: one user, one sqlite file, derived embed work would fight an append log, and OpenAPI stays request/response for mutations. Domain nouns: ADR 0011.
 
-ADR 0008 parked "server-written discovery" for the CLI URL. That is revisited here: the managed daemon *is* that discovery, via health + a state-dir registration file, not by deriving URL from the server config file.
+ADR 0008 parked "server-written discovery" for the CLI URL. That is revisited here: the managed daemon _is_ that discovery, via health + a state-dir registration file, not by deriving URL from the server config file.
 
 ## Decision
 
@@ -68,30 +68,38 @@ So "edit in one place updates the other" means: both clients hit the same server
 
 ### Managed daemon (simple ensure)
 
-Copy opencode's *lifecycle idea*, not its multi-contender election (many clients racing `serve --service` over one port).
+Copy opencode's _lifecycle idea_, not its multi-contender election (many clients racing `serve --service` over one port).
 
-**One user-facing bin:** `x-bookmarks` with subcommands (`import`, `search`, `service`, `serve`, later `tag`, `cluster`, …). Package split may remain internal; users do not need `x-bookmarks-cli`.
+**One user-facing bin:** `x-bookmarks`. Top level is `service` (process) and `api` (HttpApi). Package split may remain internal.
 
-**Auth:** trust loopback. No password in `service.json` (pid/url/port/startedAt only). Revisit if bind leaves `127.0.0.1`.
+**Auth:** trust loopback. No password in `service.json` (pid/host/port/url/startedAt only). Revisit if bind leaves `127.0.0.1`.
 
-**Bare `x-bookmarks` (no subcommand):** ensure daemon, print the url/status. Do **not** open a browser until a real UI package exists (do not train landing on `/docs`).
+**Bare `x-bookmarks` (no subcommand):** ensure daemon, print the url. Do **not** open a browser until a real UI package exists (do not train landing on `/docs`).
 
-On any invocation that needs the server:
+**Ensure URL** (bare + `service start` / `restart`): `--url` if set → probe that URL only (do not spawn). Else a `service.json` whose pid is alive and `GET /health` is HTTP 200 with `status: ok`. Else default `http://127.0.0.1:8787`. Else spawn detached `x-bookmarks service serve`. Do not wait for `llama: ready`.
 
-1. Probe `GET /health` on the configured URL (default `http://127.0.0.1:8787`, overridable with `--url`).
+**`api` URL** (no spawn): same probe order, then fail with “run `x-bookmarks service start`” if nothing is up.
+
+Foreground `service serve` writes the same `service.json`. `service stop` may stop a debug serve.
+
+On `service start` / bare / restart spawn:
+
+1. Probe as in **Ensure URL** above.
 2. If healthy → use it.
-3. If not → spawn the server **detached** (`x-bookmarks serve --service` or equivalent), **unref** the child so CLI exit does not kill it, write `~/.local/state/x-bookmarks/service.json` `{ pid, host, port, startedAt, … }`, poll `/health` until ready (or fail with a stderr tail).
-4. If bind fails because something else already took the port, re-probe health and attach; do not run a voting/election protocol.
+3. If not (and `--url` was not set) → spawn **detached** `x-bookmarks service serve`, **unref** the child, poll until `service.json` + `/health` are ready (or fail with a stderr tail).
+4. If bind fails because something else already took the port, re-probe health and attach; do not run a voting/election protocol. If the occupant is not our health payload, fail with a clear message; do not kill strangers.
 
-Explicit commands (for humans and diagnosis):
+### CLI surface
 
-| Command | Role |
-|---|---|
-| `x-bookmarks serve` | Foreground server (debug) |
-| `x-bookmarks service start` | Ensure daemon running |
-| `x-bookmarks service stop` | Stop the registered daemon |
-| `x-bookmarks service restart` | Stop then start; must not silently reuse an unresponsive incumbent |
-| `x-bookmarks service status` | Registration + health |
+| Command                       | Role                                                                                                                                                                                                                                                                     |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `x-bookmarks`                 | Ensure daemon, print url                                                                                                                                                                                                                                                 |
+| `x-bookmarks service serve`   | Foreground server (debug)                                                                                                                                                                                                                                                |
+| `x-bookmarks service start`   | Ensure daemon running                                                                                                                                                                                                                                                    |
+| `x-bookmarks service stop`    | Stop the registered daemon                                                                                                                                                                                                                                               |
+| `x-bookmarks service restart` | Stop then start; must not silently reuse an unresponsive incumbent                                                                                                                                                                                                       |
+| `x-bookmarks service status`  | Registration + health                                                                                                                                                                                                                                                    |
+| `x-bookmarks api …`           | Generated 1:1 from `HttpApi` (`HttpApi.reflect`). Top-level endpoints are `api <id>`. Other groups are `api <group> <id>`. Query/path → flags; JSON body → `--file` (`-` = stdin). Stdout JSON. Skip SSE/stream endpoints. Adding an HttpApi endpoint is the CLI change. |
 
 Exiting the CLI or closing the browser does not stop the daemon. Only `service stop`, an explicit kill, or reboot does (user-level systemd/launchd for reboot persistence is optional later, not v1).
 
@@ -101,13 +109,13 @@ This revises ADR 0008's "CLI reads no discovery file": the CLI may read `service
 
 ### Packages (directional)
 
-- Server gains: bus module, `GET /events`, `--service` / daemon registration, tag tree + cluster query APIs (ADR 0011).
-- Single bin gains: `ensureServer()` before HTTP calls; `service *`; `serve`; client verbs (`import`, `search`, later `tag`, `cluster`).
+- Server gains: bus module, `GET /events`, daemon registration (`service.json`), tag tree + cluster query APIs (ADR 0011).
+- Single bin gains: `service *` (ensure/spawn only here and on bare); `api` generated from `HttpApi`.
 - UI (when real, not throwaway experiments): REST snapshot + EventSource; same mutation endpoints. Out of the first ship slice.
 
 ### Ship order
 
-1. Daemon ensure + `service *` + `serve` (no bus/sse yet); client verbs auto-ensure; bare command prints url.
+1. Daemon ensure + `service *` + `api` from HttpApi (no bus/sse yet); bare command prints url.
 2. Bus + `GET /events` (prove with curl / EventSource).
 3. Tag tree + bookmark-tag APIs + ephemeral cluster query.
 4. Real web UI later.

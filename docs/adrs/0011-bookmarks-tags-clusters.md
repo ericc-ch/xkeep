@@ -15,8 +15,9 @@ Plan.md talked about tags, clusters, and a canvas. Main only persisted `bookmark
 ### Durable domain
 
 - **Bookmark** — one saved X post. Primary key is the tweet snowflake id (text). Author/handle/avatar/text/media/etc. live on the row. No separate users table in v1.
-- **Tag** — durable label. Stored as rows: `id`, `name`, `parentId` (nullable). Hierarchy is a tree via parent pointers, not path strings (rename must not rewrite every join by string).
+- **Tag** — durable label. Stored as rows: `id`, `name`, `parentId` (nullable). Hierarchy is a tree via parent pointers, not path strings (rename must not rewrite every join by string). Names are unique among siblings (same `parentId`), case-sensitive.
 - **Bookmark ↔ tag** — many-to-many. No `source` / manual-vs-auto column: a tag applied by a human or by an auto sampler is the same row relationship. Auto is just who called the API.
+- **Tag delete** — delete that node only: drop its bookmark links, reparent children to its parent. Do not cascade-wipe the subtree.
 
 Hashtags from the X dump stay on the bookmark as imported metadata (`hashtags_json`). They are not tags until the user (or auto flow) promotes them.
 
