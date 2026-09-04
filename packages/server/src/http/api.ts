@@ -14,11 +14,11 @@ export class ImportFailed extends Schema.TaggedError<ImportFailed>()(
   { httpApiStatus: 400 },
 ) {}
 
-export const LlamaHealth = Schema.Union([
-  Schema.TaggedStruct("starting", {}),
-  Schema.TaggedStruct("ready", {}),
-  Schema.TaggedStruct("unavailable", { reason: Schema.String }),
-])
+export const LlamaHealth = Schema.TaggedUnion({
+  starting: {},
+  ready: {},
+  unavailable: { reason: Schema.String },
+})
 
 export const Health = Schema.Struct({
   status: Schema.Literal("ok"),

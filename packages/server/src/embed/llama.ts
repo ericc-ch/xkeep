@@ -8,7 +8,6 @@ import {
   FileSystem,
   Layer,
   Path,
-  Predicate,
   Ref,
   Schema,
   Semaphore,
@@ -34,10 +33,11 @@ type Config = Context.Service.Shape<typeof AppConfig>
 const MIN_TEXT_GGUF_BYTES = 800_000_000
 const MIN_MMPROJ_GGUF_BYTES = 200_000_000
 
-export type LlamaState =
-  | { readonly _tag: "starting" }
-  | { readonly _tag: "ready" }
-  | { readonly _tag: "unavailable"; readonly reason: string }
+export type LlamaState = Data.TaggedEnum<{
+  starting: {}
+  ready: {}
+  unavailable: { readonly reason: string }
+}>
 
 export const LlamaState = Data.taggedEnum<LlamaState>()
 
@@ -120,17 +120,6 @@ const stdio = {
   stderr: "inherit" as const,
 }
 
-const downloadFile = Effect.fn("downloadFile")(function* (url: string, dest: string) {
-  const fs = yield* FileSystem.FileSystem
-  const raw = yield* HttpClient.HttpClient
-  const client = HttpClient.followRedirects(10)(raw)
-  const tmp = `${dest}.part`
-  const response = yield* client.execute(HttpClientRequest.get(url))
-  yield* HttpClientResponse.filterStatusOk(response)
-  yield* Stream.run(response.stream, fs.sink(tmp))
-  yield* fs.rename(tmp, dest)
-})
-
 const ensureSizedFile = Effect.fn("ensureSizedFile")(function* (
   url: string,
   dest: string,
@@ -144,7 +133,13 @@ const ensureSizedFile = Effect.fn("ensureSizedFile")(function* (
     yield* fs.remove(dest)
   }
   yield* Effect.log(`downloading ${url} to ${dest}`)
-  yield* downloadFile(url, dest)
+  const raw = yield* HttpClient.HttpClient
+  const client = HttpClient.followRedirects(10)(raw)
+  const tmp = `${dest}.part`
+  const response = yield* client.execute(HttpClientRequest.get(url))
+  yield* HttpClientResponse.filterStatusOk(response)
+  yield* Stream.run(response.stream, fs.sink(tmp))
+  yield* fs.rename(tmp, dest)
   const after = yield* fs.stat(dest)
   if (after.size < BigInt(minBytes)) {
     yield* fs.remove(dest)
@@ -154,48 +149,16 @@ const ensureSizedFile = Effect.fn("ensureSizedFile")(function* (
   }
 })
 
-const ensureGguf = Effect.fn("ensureGguf")(function* (config: Config) {
-  const fs = yield* FileSystem.FileSystem
-  yield* fs.makeDirectory(config.ggufDir, { recursive: true })
-  yield* ensureSizedFile(TEXT_GGUF_URL, config.textGgufPath, MIN_TEXT_GGUF_BYTES)
-  yield* ensureSizedFile(MMPROJ_GGUF_URL, config.mmprojGgufPath, MIN_MMPROJ_GGUF_BYTES)
-})
-
-const extractArchive = Effect.fn("extractArchive")(function* (
-  archive: string,
-  dest: string,
-  os: NodeJS.Platform,
-) {
-  if (os === "linux" || os === "darwin") {
-    const tar = yield* ChildProcess.make("tar", ["-xzf", archive, "-C", dest], stdio)
-    const code = yield* tar.exitCode
-    if (code !== 0) {
-      return yield* new LlamaSetupError({ reason: `tar extract failed with ${String(code)}` })
-    }
-    return
-  }
-  return yield* new LlamaSetupError({ reason: `no llama.cpp vulkan extract for ${os}` })
-})
-
-const whichLlamaServer = Effect.fn("whichLlamaServer")(function* () {
+const ensureBinary = Effect.fn("ensureBinary")(function* (config: Config) {
   const fs = yield* FileSystem.FileSystem
   const pathMod = yield* Path.Path
   const name = platform === "win32" ? "llama-server.exe" : "llama-server"
-  const dirs = (process.env.PATH ?? "").split(delimiter)
-  for (const dir of dirs) {
+  for (const dir of (process.env.PATH ?? "").split(delimiter)) {
     if (dir.length === 0) continue
     const candidate = pathMod.join(dir, name)
     if (yield* fs.exists(candidate)) return candidate
   }
-  return undefined
-})
-
-const ensureBinary = Effect.fn("ensureBinary")(function* (config: Config) {
-  const onPath = yield* whichLlamaServer()
-  if (onPath !== undefined) return onPath
-  const fs = yield* FileSystem.FileSystem
-  const pathMod = yield* Path.Path
-  const bin = pathMod.join(config.llamaDir, "llama-server")
+  const bin = pathMod.join(config.llamaDir, name)
   if (yield* fs.exists(bin)) return bin
   const url = llamaReleaseUrl(platform)
   const tarName = llamaTarballName(platform)
@@ -206,117 +169,42 @@ const ensureBinary = Effect.fn("ensureBinary")(function* (config: Config) {
   const archive = pathMod.join(config.cacheDir, tarName)
   yield* ensureSizedFile(url, archive, 1_000_000)
   yield* fs.makeDirectory(config.llamaDir, { recursive: true })
-  yield* extractArchive(archive, config.llamaDir, platform)
+  if (platform !== "linux" && platform !== "darwin") {
+    return yield* new LlamaSetupError({ reason: `no llama.cpp vulkan extract for ${platform}` })
+  }
+  const tar = yield* ChildProcess.make("tar", ["-xzf", archive, "-C", config.llamaDir], stdio)
+  const code = yield* tar.exitCode
+  if (code !== 0) {
+    return yield* new LlamaSetupError({ reason: `tar extract failed with ${String(code)}` })
+  }
   if (!(yield* fs.exists(bin))) {
     return yield* new LlamaSetupError({ reason: `llama-server missing after extract at ${bin}` })
   }
   return bin
 })
 
-const waitHealthy = Effect.fn("waitHealthy")(function* (config: Config) {
-  for (let i = 0; i < 60; i++) {
-    const ok = yield* HttpClient.get(`${config.llamaBaseUrl}/health`).pipe(
-      Effect.flatMap(HttpClientResponse.filterStatusOk),
-      Effect.as(true),
-      Effect.catch(() => Effect.succeed(false)),
-    )
-    if (ok) return
-    yield* Effect.sleep("500 millis")
-  }
-  return yield* new LlamaSetupError({ reason: "llama-server did not become healthy" })
-})
-
-const spawnLlama = Effect.fn("spawnLlama")(function* (
-  config: Config,
-  bin: string,
-  state: Ref.Ref<LlamaState>,
-) {
-  const pathMod = yield* Path.Path
-  const dir = pathMod.dirname(bin)
-  const libPath = `${dir}${delimiter}${process.env.LD_LIBRARY_PATH ?? ""}`
-  const handle = yield* ChildProcess.make(
-    bin,
-    [
-      "-m",
-      config.textGgufPath,
-      "--mmproj",
-      config.mmprojGgufPath,
-      "--embedding",
-      "--pooling",
-      "last",
-      "--embd-normalize",
-      "2",
-      "--image-min-tokens",
-      "4",
-      "--image-max-tokens",
-      String(IMAGE_MAX_TOKENS),
-      "--no-cache-prompt",
-      "--cache-ram",
-      "0",
-      "--host",
-      "127.0.0.1",
-      "--port",
-      String(config.llamaPort),
-      "-ngl",
-      "99",
-      "-np",
-      "8",
-      "-c",
-      "8192",
-    ],
-    {
-      ...stdio,
-      detached: false,
-      env: {
-        ...process.env,
-        LD_LIBRARY_PATH: libPath,
-        LLAMA_MEDIA_MARKER: MEDIA_MARKER,
-      },
-    },
-  )
-  yield* handle.exitCode.pipe(
-    Effect.flatMap((code) =>
-      Ref.set(state, LlamaState.unavailable({ reason: `llama-server exited ${String(code)}` })),
-    ),
-    Effect.forkScoped,
-  )
-  yield* waitHealthy(config)
-  const after = yield* Ref.get(state)
-  if (Predicate.isTagged(after, "unavailable")) {
-    return yield* new LlamaSetupError({
-      reason: `llama-server died before ready: ${after.reason}`,
-    })
-  }
-})
-
-const numbersFromUnknown = (value: unknown): ReadonlyArray<number> | undefined => {
-  if (!Array.isArray(value) || value.length === 0) return undefined
-  const last = value[value.length - 1]
-  if (typeof last === "number") {
-    for (const item of value) {
-      if (typeof item !== "number") return undefined
-    }
-    return value
-  }
-  return numbersFromUnknown(last)
-}
-
 const parseEmbedding = (raw: unknown): Effect.Effect<Float32Array, LlamaEmbedError> => {
   if (!raw || typeof raw !== "object") {
     return Effect.fail(new LlamaEmbedError({ reason: "embedding response is not an object" }))
   }
-  const record = raw
   let vec: unknown
-  if ("embedding" in record) vec = record.embedding
-  if (vec === undefined && "data" in record && Array.isArray(record.data)) {
-    const first = record.data[0]
+  if ("embedding" in raw) vec = raw.embedding
+  if (vec === undefined && "data" in raw && Array.isArray(raw.data)) {
+    const first = raw.data[0]
     if (first && typeof first === "object" && "embedding" in first) vec = first.embedding
   }
-  const nums = numbersFromUnknown(vec)
-  if (nums === undefined) {
-    return Effect.fail(new LlamaEmbedError({ reason: "embedding vector missing" }))
+  let cursor: unknown = vec
+  while (Array.isArray(cursor) && cursor.length > 0) {
+    const last = cursor[cursor.length - 1]
+    if (typeof last === "number") {
+      if (cursor.every((item) => typeof item === "number")) {
+        return Effect.succeed(Float32Array.from(cursor))
+      }
+      break
+    }
+    cursor = last
   }
-  return Effect.succeed(Float32Array.from(nums))
+  return Effect.fail(new LlamaEmbedError({ reason: "embedding vector missing" }))
 }
 
 const EmbedRow = Schema.Struct({
@@ -379,9 +267,78 @@ const setupLlama = Effect.fn("setupLlama")(function* (
   config: Config,
   state: Ref.Ref<LlamaState>,
 ) {
-  yield* ensureGguf(config)
+  const fs = yield* FileSystem.FileSystem
+  yield* fs.makeDirectory(config.ggufDir, { recursive: true })
+  yield* ensureSizedFile(TEXT_GGUF_URL, config.textGgufPath, MIN_TEXT_GGUF_BYTES)
+  yield* ensureSizedFile(MMPROJ_GGUF_URL, config.mmprojGgufPath, MIN_MMPROJ_GGUF_BYTES)
   const bin = yield* ensureBinary(config)
-  yield* spawnLlama(config, bin, state)
+  const pathMod = yield* Path.Path
+  const dir = pathMod.dirname(bin)
+  const libPath = `${dir}${delimiter}${process.env.LD_LIBRARY_PATH ?? ""}`
+  const handle = yield* ChildProcess.make(
+    bin,
+    [
+      "-m",
+      config.textGgufPath,
+      "--mmproj",
+      config.mmprojGgufPath,
+      "--embedding",
+      "--pooling",
+      "last",
+      "--embd-normalize",
+      "2",
+      "--image-min-tokens",
+      "4",
+      "--image-max-tokens",
+      String(IMAGE_MAX_TOKENS),
+      "--no-cache-prompt",
+      "--cache-ram",
+      "0",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      String(config.llamaPort),
+      "-ngl",
+      "99",
+      "-np",
+      "8",
+      "-c",
+      "8192",
+    ],
+    {
+      ...stdio,
+      detached: false,
+      env: {
+        ...process.env,
+        LD_LIBRARY_PATH: libPath,
+        LLAMA_MEDIA_MARKER: MEDIA_MARKER,
+      },
+    },
+  )
+  yield* handle.exitCode.pipe(
+    Effect.andThen((code) =>
+      Ref.set(state, LlamaState.unavailable({ reason: `llama-server exited ${String(code)}` })),
+    ),
+    Effect.forkScoped,
+  )
+  for (let i = 0; i < 60; i++) {
+    const ok = yield* HttpClient.get(`${config.llamaBaseUrl}/health`).pipe(
+      Effect.andThen(HttpClientResponse.filterStatusOk),
+      Effect.as(true),
+      Effect.catch(() => Effect.succeed(false)),
+    )
+    if (ok) break
+    yield* Effect.sleep("500 millis")
+    if (i === 59) {
+      return yield* new LlamaSetupError({ reason: "llama-server did not become healthy" })
+    }
+  }
+  const after = yield* Ref.get(state)
+  if (LlamaState.$is("unavailable")(after)) {
+    return yield* new LlamaSetupError({
+      reason: `llama-server died before ready: ${after.reason}`,
+    })
+  }
   yield* Ref.set(state, LlamaState.ready())
 })
 
@@ -408,19 +365,19 @@ export const layer = Layer.effect(
         kind: EmbedKind,
       ) {
         const current = yield* Ref.get(state)
-        if (!Predicate.isTagged(current, "ready")) {
-          const reason = Predicate.isTagged(current, "unavailable")
-            ? current.reason
-            : "llama is starting"
-          return yield* new LlamaUnavailable({ reason })
-        }
-        if (items.length === 0) return []
-        return yield* embedLock.withPermits(1)(
-          embedBatch(config, items, kind).pipe(
-            Effect.catchTag("LlamaEmbedError", (error) => error),
-            Effect.mapError(() => new LlamaEmbedError({ reason: "embed request failed" })),
-          ),
-        )
+        return yield* LlamaState.$match(current, {
+          starting: () => new LlamaUnavailable({ reason: "llama is starting" }),
+          unavailable: (s) => new LlamaUnavailable({ reason: s.reason }),
+          ready: () =>
+            items.length === 0
+              ? Effect.succeed([])
+              : embedLock.withPermits(1)(
+                  embedBatch(config, items, kind).pipe(
+                    Effect.catchTag("LlamaEmbedError", (error) => error),
+                    Effect.mapError(() => new LlamaEmbedError({ reason: "embed request failed" })),
+                  ),
+                ),
+        })
       }),
     }
   }),
