@@ -16,7 +16,7 @@ Use `env-paths` with name `x-bookmarks` and `suffix: ""`.
 - cache: Vulkan `llama-server` binary, GGUF + mmproj
 - config / log: as env-paths defines
 
-Overrides: `X_BOOKMARKS_DATA_DIR`, `X_BOOKMARKS_CACHE_DIR`.
+Overrides: CLI flags and the config file (`paths.data`, `paths.cache`).
 
 ## Consequences
 

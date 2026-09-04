@@ -1,5 +1,5 @@
 import { rmSync } from "node:fs"
-import { NodeHttpClient, NodeHttpServer } from "@effect/platform-node"
+import { NodeFileSystem, NodeHttpClient, NodeHttpServer } from "@effect/platform-node"
 import { describe, expect, it } from "vitest"
 import { Data, Effect, FileSystem, Layer, Schema } from "effect"
 import { HttpClient, HttpClientRequest, HttpRouter } from "effect/unstable/http"
@@ -20,11 +20,16 @@ const canaryText = "x-bookmarks e2e canary quartz-vector-7"
 
 const dump = Schema.decodeUnknownSync(BookmarkDump)(dumpJson)
 
+const appConfigLayer = AppConfig.layer({
+  dataDir,
+  configPath: `${dataDir}/config.json`,
+}).pipe(Layer.provide(NodeFileSystem.layer))
+
 const e2eLayer = Layer.mergeAll(handlers, drainLayer).pipe(
   Layer.provide(libraryLayer),
   Layer.provide(llamaLayerTest),
   Layer.provide(NodeHttpClient.layerNodeHttp),
-  Layer.provide(AppConfig.layer({ dataDir, configPath: `${dataDir}/config.json` })),
+  Layer.provide(appConfigLayer),
   Layer.provideMerge(NodeHttpServer.layerHttpServices),
 )
 
@@ -131,7 +136,7 @@ describe.sequential("library HttpApi", () => {
     }).pipe(
       Layer.provide(libraryLayer),
       Layer.provide(llamaLayerTest),
-      Layer.provide(AppConfig.layer({ dataDir, configPath: `${dataDir}/config.json` })),
+      Layer.provide(appConfigLayer),
       Layer.provideMerge(NodeHttpServer.layerTest),
     )
     await Effect.runPromise(

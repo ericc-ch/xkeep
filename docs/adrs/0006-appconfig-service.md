@@ -10,8 +10,8 @@ Listen address, data/cache dirs, and derived library paths were a tagged `Librar
 
 ## Decision
 
-`AppConfig` is a v4 `Context.Service` with `make`. CLI flags override `X_BOOKMARKS_*`, then `env-paths` / defaults. `make` returns a snapshot: listen, dirs, derived paths, llama base URL. `AppConfig.layer(overrides)` is `Layer.effect(this, this.make(overrides))`. `serverLayer` reads host/port from the service. GGUF URLs, dims, prompts, and `LLAMA_BUILD` stay module constants. No branded path/port types.
+`AppConfig` is a v4 `Context.Service` with `make`. `make` returns the resolved snapshot: listen, dirs, derived paths, llama base URL. `AppConfig.layer(overrides)` is `Layer.effect(this, this.make(overrides))` and requires `FileSystem`. The composition root and test layers provide `NodeFileSystem.layer`. `serverLayer` reads host/port from the service. GGUF URLs, dims, prompts, and `LLAMA_BUILD` stay module constants.
 
 ## Consequences
 
-Tests and layers provide `AppConfig.layer({ ... })`. There is one listen address. Path helpers and `LibraryPaths` are gone.
+Tests and layers provide `AppConfig.layer({ ... })` plus a filesystem. There is one listen address. Path helpers and `LibraryPaths` are gone. Callers that only `yield* AppConfig` stay unchanged.

@@ -11,8 +11,7 @@ class CliError extends Data.TaggedError("CliError")<{
   readonly reason: string
 }> {}
 
-const defaultUrl =
-  process.env.X_BOOKMARKS_URL || `http://${HTTP_HOST_DEFAULT}:${HTTP_PORT_DEFAULT}`
+const defaultUrl = `http://${HTTP_HOST_DEFAULT}:${HTTP_PORT_DEFAULT}`
 
 const importCommand = Command.make(
   "import",

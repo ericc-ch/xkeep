@@ -1,6 +1,5 @@
 import envPaths from "env-paths"
-import { NodeFileSystem } from "@effect/platform-node"
-import { Context, Data, Effect, FileSystem, Layer, Schema } from "effect"
+import { Context, Data, Effect, FileSystem, Layer, Predicate, Schema, SchemaIssue } from "effect"
 
 const APP_NAME = "x-bookmarks"
 
@@ -19,38 +18,6 @@ export class ConfigError extends Data.TaggedError("ConfigError")<{
   readonly reason: string
 }> {}
 
-const decodePort = (
-  key: string,
-  raw: number | string | undefined,
-  fallback: number,
-): Effect.Effect<number, ConfigError> => {
-  if (raw === undefined) return Effect.succeed(fallback)
-  const n = typeof raw === "number" ? raw : Number(raw)
-  if (!Number.isInteger(n) || n < 1 || n > 65535) {
-    return Effect.fail(new ConfigError({ reason: `invalid port for ${key}: ${String(raw)}` }))
-  }
-  return Effect.succeed(n)
-}
-
-const decodeNonBlank = (
-  key: string,
-  raw: string | undefined,
-  fallback: string,
-): Effect.Effect<string, ConfigError> => {
-  if (raw === undefined) return Effect.succeed(fallback)
-  if (raw.trim() === "") {
-    return Effect.fail(
-      new ConfigError({ reason: `invalid value for ${key}: must be a non-blank string` }),
-    )
-  }
-  return Effect.succeed(raw)
-}
-
-const envValue = (key: string): string | undefined => {
-  const value = process.env[key]
-  return value === "" ? undefined : value
-}
-
 const NonBlankString = Schema.String.check(
   Schema.makeFilter((value: string) => value.trim() !== "", { expected: "a non-blank string" }),
 )
@@ -62,16 +29,33 @@ const Port = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 65535 })).
   }),
 )
 
+const decodeField = Effect.fn("decodeField")(function* <S extends Schema.Constraint>(input: {
+  readonly key: string
+  readonly schema: S
+  readonly raw: unknown
+  readonly fallback: S["Type"]
+}) {
+  if (input.raw === undefined) return input.fallback
+  return yield* Schema.decodeUnknownEffect(input.schema)(input.raw).pipe(
+    Effect.mapError(
+      (error) =>
+        new ConfigError({
+          reason: `invalid value for ${input.key}: ${error.message}, got ${JSON.stringify(input.raw)}`,
+        }),
+    ),
+  )
+})
+
 const ConfigFileSchema = Schema.Struct({
   listen: Schema.optional(
     Schema.Struct({
       host: Schema.optional(
-        Schema.String.pipe(
+        Schema.Unknown.pipe(
           Schema.annotateKey({ description: "HTTP bind host. Omitted uses 127.0.0.1." }),
         ),
       ),
       port: Schema.optional(
-        Schema.Number.pipe(
+        Schema.Unknown.pipe(
           Schema.annotateKey({ description: "HTTP listen port. Omitted uses 8787." }),
         ),
       ),
@@ -85,14 +69,14 @@ const ConfigFileSchema = Schema.Struct({
   paths: Schema.optional(
     Schema.Struct({
       data: Schema.optional(
-        Schema.String.pipe(
+        Schema.Unknown.pipe(
           Schema.annotateKey({
             description: "Directory for sqlite, media, and imports. Omitted uses env-paths data.",
           }),
         ),
       ),
       cache: Schema.optional(
-        Schema.String.pipe(
+        Schema.Unknown.pipe(
           Schema.annotateKey({
             description: "Directory for llama binaries and GGUF files. Omitted uses env-paths cache.",
           }),
@@ -108,7 +92,7 @@ const ConfigFileSchema = Schema.Struct({
   llama: Schema.optional(
     Schema.Struct({
       port: Schema.optional(
-        Schema.Number.pipe(
+        Schema.Unknown.pipe(
           Schema.annotateKey({ description: "llama-server port. Omitted uses 8913." }),
         ),
       ),
@@ -128,9 +112,9 @@ const ConfigFileSchema = Schema.Struct({
   }),
 )
 
-export const ResolvedConfigSchema = Schema.Struct({
+const ResolvedConfigSchema = Schema.Struct({
   host: NonBlankString.pipe(
-    Schema.annotateKey({ description: "HTTP bind host after flags, env, file, and defaults." }),
+    Schema.annotateKey({ description: "HTTP bind host after flags, file, and defaults." }),
   ),
   port: Port.pipe(Schema.annotateKey({ description: "HTTP listen port after merge." })),
   dataDir: NonBlankString.pipe(
@@ -169,11 +153,9 @@ export const ResolvedConfigSchema = Schema.Struct({
     identifier: "ResolvedConfig",
     title: "Resolved config",
     description:
-      "Runtime config after flags, env, file, and defaults. Derived paths are included. Module constants are not.",
+      "Runtime config after flags, file, and defaults. Derived paths are included. Module constants are not.",
   }),
 )
-
-export type ResolvedConfig = typeof ResolvedConfigSchema.Type
 
 const readConfigFile = Effect.fn("readConfigFile")(function* (configPath: string) {
   const fs = yield* FileSystem.FileSystem
@@ -184,14 +166,38 @@ const readConfigFile = Effect.fn("readConfigFile")(function* (configPath: string
   const raw = yield* fs.readFileString(configPath).pipe(
     Effect.mapError(() => new ConfigError({ reason: `config file is not readable: ${configPath}` })),
   )
-  const json: unknown = yield* Effect.try({
-    try: () => JSON.parse(raw),
+  const json = yield* Effect.try({
+    try: (): unknown => JSON.parse(raw),
     catch: () => new ConfigError({ reason: `config file is not valid json: ${configPath}` }),
   })
   return yield* Schema.decodeUnknownEffect(ConfigFileSchema, { onExcessProperty: "error" })(json).pipe(
-    Effect.mapError(
-      (error) => new ConfigError({ reason: `config file ${configPath}: ${error.message}` }),
-    ),
+    Effect.mapError((error) => {
+      const keys: Array<string> = []
+      let node: SchemaIssue.Issue | undefined = error.issue
+      while (node !== undefined) {
+        if (Predicate.isTagged(node, "Pointer")) {
+          for (const key of node.path) keys.push(String(key))
+          node = node.issue
+          continue
+        }
+        if (Predicate.isTagged(node, "Filter") || Predicate.isTagged(node, "Encoding")) {
+          node = node.issue
+          continue
+        }
+        if (Predicate.isTagged(node, "Composite") || Predicate.isTagged(node, "AnyOf")) {
+          node = node.issues[0]
+          continue
+        }
+        break
+      }
+      const path = keys.join(".")
+      return new ConfigError({
+        reason:
+          path === ""
+            ? `config file ${configPath}: ${error.message}`
+            : `config file ${configPath}: ${path}`,
+      })
+    }),
   )
 })
 
@@ -204,36 +210,41 @@ export type AppConfigOverrides = {
   readonly configPath?: string | undefined
 }
 
-export class AppConfig extends Context.Service<AppConfig, ResolvedConfig>()("AppConfig", {
+export class AppConfig extends Context.Service<AppConfig>()("AppConfig", {
   make: Effect.fn("AppConfig.make")(function* (overrides: AppConfigOverrides) {
     const paths = envPaths(APP_NAME, { suffix: "" })
     const configPath = overrides.configPath ?? `${paths.config}/config.json`
     const file = yield* readConfigFile(configPath)
-    const port = yield* decodePort(
-      "listen.port",
-      overrides.port ?? envValue("X_BOOKMARKS_PORT") ?? file?.listen?.port,
-      HTTP_PORT_DEFAULT,
-    )
-    const llamaPort = yield* decodePort(
-      "llama.port",
-      overrides.llamaPort ?? envValue("X_BOOKMARKS_LLAMA_PORT") ?? file?.llama?.port,
-      LLAMA_PORT_DEFAULT,
-    )
-    const host = yield* decodeNonBlank(
-      "listen.host",
-      overrides.host ?? envValue("X_BOOKMARKS_HOST") ?? file?.listen?.host,
-      HTTP_HOST_DEFAULT,
-    )
-    const dataDir = yield* decodeNonBlank(
-      "paths.data",
-      overrides.dataDir ?? envValue("X_BOOKMARKS_DATA_DIR") ?? file?.paths?.data,
-      paths.data,
-    )
-    const cacheDir = yield* decodeNonBlank(
-      "paths.cache",
-      overrides.cacheDir ?? envValue("X_BOOKMARKS_CACHE_DIR") ?? file?.paths?.cache,
-      paths.cache,
-    )
+    const port = yield* decodeField({
+      key: "listen.port",
+      schema: Port,
+      raw: overrides.port ?? file?.listen?.port,
+      fallback: HTTP_PORT_DEFAULT,
+    })
+    const llamaPort = yield* decodeField({
+      key: "llama.port",
+      schema: Port,
+      raw: overrides.llamaPort ?? file?.llama?.port,
+      fallback: LLAMA_PORT_DEFAULT,
+    })
+    const host = yield* decodeField({
+      key: "listen.host",
+      schema: NonBlankString,
+      raw: overrides.host ?? file?.listen?.host,
+      fallback: HTTP_HOST_DEFAULT,
+    })
+    const dataDir = yield* decodeField({
+      key: "paths.data",
+      schema: NonBlankString,
+      raw: overrides.dataDir ?? file?.paths?.data,
+      fallback: paths.data,
+    })
+    const cacheDir = yield* decodeField({
+      key: "paths.cache",
+      schema: NonBlankString,
+      raw: overrides.cacheDir ?? file?.paths?.cache,
+      fallback: paths.cache,
+    })
     const ggufDir = `${cacheDir}/gguf`
     return yield* Schema.decodeUnknownEffect(ResolvedConfigSchema, { onExcessProperty: "error" })({
       host,
@@ -256,8 +267,7 @@ export class AppConfig extends Context.Service<AppConfig, ResolvedConfig>()("App
     )
   }),
 }) {
-  static layer = (overrides: AppConfigOverrides) =>
-    Layer.effect(this, this.make(overrides)).pipe(Layer.provide(NodeFileSystem.layer))
+  static layer = (overrides: AppConfigOverrides) => Layer.effect(this, this.make(overrides))
 }
 
 export const llamaTarballName = (os: NodeJS.Platform): string | undefined => {
