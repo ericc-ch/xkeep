@@ -1,4 +1,4 @@
-import { Schema } from "effect"
+import { Data, Schema } from "effect"
 
 const DUMP_SCHEMA = "xkeep-dump/1" as const
 
@@ -43,7 +43,7 @@ const Bookmark: Schema.Codec<Bookmark> = Schema.Struct({
 })
 
 export const BookmarkDump = Schema.Struct({
-  schema: Schema.Literal(DUMP_SCHEMA),
+  schema: Schema.Literals([DUMP_SCHEMA, "x-bookmarks-dump/1"]),
   source: Schema.Literal("bookmark"),
   captured_at: CapturedAt,
   bookmarks: Schema.Array(Bookmark),
@@ -63,10 +63,28 @@ export class ImportFailed extends Schema.TaggedError<ImportFailed>()(
   { httpApiStatus: 400 },
 ) {}
 
+export class ImportBusy extends Schema.TaggedError<ImportBusy>()(
+  "ImportBusy",
+  { reason: Schema.String },
+  { httpApiStatus: 409 },
+) {}
+
+export type ImportStatus = Data.TaggedEnum<{
+  idle: {}
+  running: {}
+}>
+
+export const ImportStatus = Data.taggedEnum<ImportStatus>()
+
 const LlamaHealth = Schema.TaggedUnion({
   starting: {},
   ready: {},
   unavailable: { reason: Schema.String },
+})
+
+const ImportHealth = Schema.TaggedUnion({
+  idle: {},
+  running: {},
 })
 
 export const Health = Schema.Struct({
@@ -74,13 +92,13 @@ export const Health = Schema.Struct({
   bookmarks: Schema.Number,
   embedded: Schema.Number,
   llama: LlamaHealth,
+  import: ImportHealth,
 })
 
 export const ImportResult = Schema.Struct({
   imported: Schema.Number,
   updated: Schema.Number,
-  stills: Schema.Number,
-  stillFailed: Schema.Number,
+  stillsPending: Schema.Number,
   pendingEmbeddings: Schema.Number,
 })
 

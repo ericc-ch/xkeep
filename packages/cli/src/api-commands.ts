@@ -137,7 +137,10 @@ export const apiCommand = Command.make(
         : { method: resolved.method, headers, body }
     const response = yield* Effect.tryPromise({
       try: () => fetch(new URL(resolved.path, `${baseUrl.replace(/\/$/, "")}/`), init),
-      catch: (cause) => new CliError({ reason: String(cause) }),
+      catch: (cause) =>
+        new CliError({
+          reason: cause instanceof Error ? cause.message : String(cause),
+        }),
     })
     const output = yield* Effect.tryPromise({
       try: () => response.text(),

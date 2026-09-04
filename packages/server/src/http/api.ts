@@ -6,7 +6,7 @@ import {
   HttpApiGroup,
   OpenApi,
 } from "effect/unstable/httpapi"
-import { API_PREFIX, BookmarkDump, Health, ImportFailed, ImportResult, SearchResult } from "../schema.ts"
+import { API_PREFIX, BookmarkDump, Health, ImportBusy, ImportFailed, ImportResult, SearchResult } from "../schema.ts"
 
 export const Api = HttpApi.make("xkeep")
   .annotate(OpenApi.Title, "xkeep")
@@ -23,7 +23,7 @@ export const Api = HttpApi.make("xkeep")
         HttpApiEndpoint.post("importDump", "/imports", {
           payload: BookmarkDump,
           success: ImportResult,
-          error: [ImportFailed, HttpApiError.InternalServerError],
+          error: [ImportFailed, ImportBusy, HttpApiError.InternalServerError],
         }),
       )
       .add(

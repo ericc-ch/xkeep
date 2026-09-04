@@ -82,10 +82,17 @@ const ConfigFileSchema = Schema.Struct({
           }),
         ),
       ),
+      log: Schema.optional(
+        Schema.Unknown.pipe(
+          Schema.annotateKey({
+            description: "Directory for the daemon log file. Omitted uses env-paths log.",
+          }),
+        ),
+      ),
     }).pipe(
       Schema.annotate({
         title: "Paths",
-        description: "On-disk directories for sqlite, media, imports, and download cache.",
+        description: "On-disk directories for sqlite, media, imports, download cache, and logs.",
       }),
     ),
   ),
@@ -123,6 +130,9 @@ const ResolvedConfigSchema = Schema.Struct({
   cacheDir: NonBlankString.pipe(
     Schema.annotateKey({ description: "Download cache directory after merge." }),
   ),
+  logDir: NonBlankString.pipe(
+    Schema.annotateKey({ description: "Daemon log directory after merge." }),
+  ),
   llamaPort: Port.pipe(Schema.annotateKey({ description: "llama-server port after merge." })),
   sqlitePath: NonBlankString.pipe(
     Schema.annotateKey({ description: "SQLite file derived from dataDir." }),
@@ -147,6 +157,9 @@ const ResolvedConfigSchema = Schema.Struct({
   ),
   llamaBaseUrl: NonBlankString.pipe(
     Schema.annotateKey({ description: "http://127.0.0.1:{llamaPort} for the embed worker." }),
+  ),
+  logFile: NonBlankString.pipe(
+    Schema.annotateKey({ description: "JSON log file derived from logDir." }),
   ),
 }).pipe(
   Schema.annotate({
@@ -206,6 +219,7 @@ export type AppConfigOverrides = {
   readonly port?: number | undefined
   readonly dataDir?: string | undefined
   readonly cacheDir?: string | undefined
+  readonly logDir?: string | undefined
   readonly llamaPort?: number | undefined
   readonly configPath?: string | undefined
 }
@@ -245,12 +259,19 @@ export class AppConfig extends Context.Service<AppConfig>()("AppConfig", {
       raw: overrides.cacheDir ?? file?.paths?.cache,
       fallback: paths.cache,
     })
+    const logDir = yield* decodeField({
+      key: "paths.log",
+      schema: NonBlankString,
+      raw: overrides.logDir ?? file?.paths?.log,
+      fallback: paths.log,
+    })
     const ggufDir = `${cacheDir}/gguf`
     return yield* Schema.decodeUnknownEffect(ResolvedConfigSchema, { onExcessProperty: "error" })({
       host,
       port,
       dataDir,
       cacheDir,
+      logDir,
       llamaPort,
       sqlitePath: `${dataDir}/xkeep.sqlite`,
       mediaDir: `${dataDir}/media`,
@@ -260,6 +281,7 @@ export class AppConfig extends Context.Service<AppConfig>()("AppConfig", {
       textGgufPath: `${ggufDir}/Qwen3-VL-Embedding-2B.Q4_K_M.gguf`,
       mmprojGgufPath: `${ggufDir}/Qwen3-VL-Embedding-2B.mmproj-Q8_0.gguf`,
       llamaBaseUrl: `http://127.0.0.1:${String(llamaPort)}`,
+      logFile: `${logDir}/xkeep.log`,
     }).pipe(
       Effect.mapError(
         (error) => new ConfigError({ reason: `resolved config invalid: ${error.message}` }),

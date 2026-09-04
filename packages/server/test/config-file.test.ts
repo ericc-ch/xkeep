@@ -51,6 +51,8 @@ describe("AppConfig config file", () => {
         llamaPort: 8913,
         dataDir: paths.data,
         cacheDir: paths.cache,
+        logDir: paths.log,
+        logFile: `${paths.log}/xkeep.log`,
       })
     })
   })
@@ -64,6 +66,8 @@ describe("AppConfig config file", () => {
         llamaPort: 8913,
         dataDir: paths.data,
         cacheDir: paths.cache,
+        logDir: paths.log,
+        logFile: `${paths.log}/xkeep.log`,
       })
     })
   })
@@ -72,7 +76,7 @@ describe("AppConfig config file", () => {
     await withDir(async (dir) => {
       const configPath = writeConfig(dir, {
         listen: { host: "127.0.0.2", port: 9000 },
-        paths: { data: "/tmp/cfg-data", cache: "/tmp/cfg-cache" },
+        paths: { data: "/tmp/cfg-data", cache: "/tmp/cfg-cache", log: "/tmp/cfg-log" },
         llama: { port: 9001 },
       })
       const config = await load({ configPath })
@@ -82,7 +86,9 @@ describe("AppConfig config file", () => {
         llamaPort: 9001,
         dataDir: "/tmp/cfg-data",
         cacheDir: "/tmp/cfg-cache",
+        logDir: "/tmp/cfg-log",
       })
+      expect(config.logFile).toBe("/tmp/cfg-log/xkeep.log")
       expect(config.sqlitePath).toBe("/tmp/cfg-data/xkeep.sqlite")
       expect(config.mediaDir).toBe("/tmp/cfg-data/media")
       expect(config.importsDir).toBe("/tmp/cfg-data/imports")
@@ -102,10 +108,13 @@ describe("AppConfig config file", () => {
         host: "127.0.0.3",
         port: 9200,
         dataDir: "/tmp/flag-data",
+        logDir: "/tmp/flag-log",
       })
       expect(config.host).toBe("127.0.0.3")
       expect(config.port).toBe(9200)
       expect(config.dataDir).toBe("/tmp/flag-data")
+      expect(config.logDir).toBe("/tmp/flag-log")
+      expect(config.logFile).toBe("/tmp/flag-log/xkeep.log")
     })
   })
 
@@ -189,6 +198,15 @@ describe("AppConfig config file", () => {
         })
         expect(reason).toContain("listen.host")
       }
+    })
+  })
+
+  it("fails on a blank log dir from the file", async () => {
+    await withDir(async (dir) => {
+      const reason = await failureReason({
+        configPath: writeConfig(dir, { paths: { log: "" } }),
+      })
+      expect(reason).toContain("paths.log")
     })
   })
 

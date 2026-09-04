@@ -6,7 +6,7 @@ Accepted (2026-09-03)
 
 ## Context
 
-`AppConfig` took overrides only from CLI flags and env vars. Durable per-machine settings (data/cache dirs) had to be restated every boot or exported in a shell profile. The whole configurable surface is five scalars (host, port, dataDir, cacheDir, llamaPort) plus one client string (server URL).
+`AppConfig` took overrides only from CLI flags and env vars. Durable per-machine settings (data/cache dirs) had to be restated every boot or exported in a shell profile. The whole configurable surface is six scalars (host, port, dataDir, cacheDir, logDir, llamaPort) plus one client string (server URL).
 
 Ownership options considered:
 
@@ -23,12 +23,12 @@ One JSON file at the env-paths config dir (`~/.config/xkeep/config.json`), read 
 ```json
 {
   "listen": { "host": "127.0.0.1", "port": 8787 },
-  "paths": { "data": "/mnt/hdd/xkeep", "cache": "/mnt/hdd/x-cache" },
+  "paths": { "data": "/mnt/hdd/xkeep", "cache": "/mnt/hdd/x-cache", "log": "/mnt/hdd/xkeep-log" },
   "llama": { "port": 8913 }
 }
 ```
 
-Precedence: CLI flags > config file > env-paths defaults. No `XKEEP_*` reads. `llamaPort` has `--llama-port` so every key has a flag. `AppConfigOverrides` has one internal escape hatch, `configPath` (tests and embedders point it at a fixture; there is no CLI flag for it). The file schema lives in the server package; it is not on `@xkeep/server/schema` because the CLI never reads the file.
+Precedence: CLI flags > config file > env-paths defaults. No `XKEEP_*` reads. `llamaPort` has `--llama-port` so every key has a flag. `logDir` has `--log-dir`. `AppConfigOverrides` has one internal escape hatch, `configPath` (tests and embedders point it at a fixture; there is no CLI flag for it). The file schema lives in the server package; it is not on `@xkeep/server/schema` because the CLI never reads the file.
 
 The CLI reads no config from disk: `--url` > built-in default.
 

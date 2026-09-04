@@ -14,9 +14,10 @@ Use `env-paths` with name `xkeep` and `suffix: ""`.
 
 - data: sqlite, `media/`, `imports/`
 - cache: Vulkan `llama-server` binary, GGUF + mmproj
-- config / log: as env-paths defines
+- log: daemon JSON log (`xkeep.log`). Default is env-paths `log` (`~/.local/state/xkeep` on Linux).
+- config: as env-paths defines
 
-Overrides: CLI flags and the config file (`paths.data`, `paths.cache`).
+Overrides: CLI flags and the config file (`paths.data`, `paths.cache`, `paths.log`).
 
 ## Consequences
 

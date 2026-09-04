@@ -19,13 +19,14 @@ const serveFlags = {
   port: Flag.integer("port").pipe(Flag.optional, Flag.withMetavar("PORT")),
   dataDir: Flag.string("data-dir").pipe(Flag.optional, Flag.withMetavar("DIR")),
   cacheDir: Flag.string("cache-dir").pipe(Flag.optional, Flag.withMetavar("DIR")),
+  logDir: Flag.string("log-dir").pipe(Flag.optional, Flag.withMetavar("DIR")),
   llamaPort: Flag.integer("llama-port").pipe(Flag.optional, Flag.withMetavar("PORT")),
 }
 
 const serviceServe = Command.make(
   "serve",
   serveFlags,
-  Effect.fn("serviceServe")(function* ({ cacheDir, dataDir, host, llamaPort, port }) {
+  Effect.fn("serviceServe")(function* ({ cacheDir, dataDir, host, llamaPort, logDir, port }) {
     const { AppConfig, layer } = yield* Effect.promise(() => import("@xkeep/server"))
     return yield* Effect.gen(function* () {
       const config = yield* AppConfig
@@ -40,6 +41,7 @@ const serviceServe = Command.make(
           port: Option.getOrUndefined(port),
           dataDir: Option.getOrUndefined(dataDir),
           cacheDir: Option.getOrUndefined(cacheDir),
+          logDir: Option.getOrUndefined(logDir),
           llamaPort: Option.getOrUndefined(llamaPort),
         }),
       ),

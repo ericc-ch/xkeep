@@ -12,6 +12,7 @@ import { Api } from "../src/http/api.ts"
 import { handlers } from "../src/http/handlers.ts"
 import { apiLayer } from "../src/http/server.ts"
 import { layer as bookmarksLayer } from "../src/bookmarks/bookmarks.ts"
+import { Import } from "../src/import/import-dump.ts"
 import dumpJson from "./fixtures/dump.json" with { type: "json" }
 
 const dataDir = "/tmp/xkeep-e2e"
@@ -22,11 +23,13 @@ const dump = Schema.decodeUnknownSync(BookmarkDump)(dumpJson)
 
 const appConfigLayer = AppConfig.layer({
   dataDir,
+  logDir: dataDir,
   configPath: `${dataDir}/config.json`,
 }).pipe(Layer.provide(NodeFileSystem.layer))
 
 const e2eLayer = Layer.mergeAll(handlers, drainLayer).pipe(
   Layer.provide(bookmarksLayer),
+  Layer.provide(Import.layer),
   Layer.provide(llamaLayerTest),
   Layer.provide(NodeHttpClient.layerNodeHttp),
   Layer.provide(appConfigLayer),
@@ -45,6 +48,21 @@ const resetDataDir = () => {
 class EmbedTimeout extends Data.TaggedError("EmbedTimeout")<{
   readonly reason: string
 }> {}
+
+class ImportTimeout extends Data.TaggedError("ImportTimeout")<{
+  readonly reason: string
+}> {}
+
+const waitUntilImportIdle = Effect.fn("waitUntilImportIdle")(function* (
+  client: HttpApiClient.ForApi<typeof Api>,
+) {
+  for (let i = 0; i < 80; i++) {
+    const health = yield* client.health()
+    if (health.import._tag === "idle") return health
+    yield* Effect.sleep("50 millis")
+  }
+  return yield* new ImportTimeout({ reason: "import stills did not finish" })
+})
 
 const waitUntilEmbedded = Effect.fn("waitUntilEmbedded")(function* (
   client: HttpApiClient.ForApi<typeof Api>,
@@ -69,6 +87,7 @@ describe.sequential("HttpApi", () => {
           bookmarks: 0,
           embedded: 0,
           llama: { _tag: "ready" },
+          import: { _tag: "idle" },
         })
       }),
     )
@@ -81,8 +100,8 @@ describe.sequential("HttpApi", () => {
         const client = yield* HttpApiTest.groups(Api, ["xkeep"])
         const result = yield* client.importDump({ payload: dump })
         expect(result.imported).toBe(1)
-        expect(result.stills).toBe(1)
-        expect(result.stillFailed).toBe(0)
+        expect(result.stillsPending).toBe(1)
+        yield* waitUntilImportIdle(client)
         const fs = yield* FileSystem.FileSystem
         expect(yield* fs.exists(`${dataDir}/media/${canaryId}-0.jpg`)).toBe(true)
       }),
@@ -95,6 +114,7 @@ describe.sequential("HttpApi", () => {
       Effect.gen(function* () {
         const client = yield* HttpApiTest.groups(Api, ["xkeep"])
         yield* client.importDump({ payload: dump })
+        yield* waitUntilImportIdle(client)
         const health = yield* waitUntilEmbedded(client)
         expect(health.embedded).toBe(health.bookmarks)
       }),
@@ -107,6 +127,7 @@ describe.sequential("HttpApi", () => {
       Effect.gen(function* () {
         const client = yield* HttpApiTest.groups(Api, ["xkeep"])
         yield* client.importDump({ payload: dump })
+        yield* waitUntilImportIdle(client)
         yield* waitUntilEmbedded(client)
         const result = yield* client.search({ query: { q: canaryText } })
         const first = result.hits[0]
@@ -121,9 +142,22 @@ describe.sequential("HttpApi", () => {
       Effect.gen(function* () {
         const client = yield* HttpApiTest.groups(Api, ["xkeep"])
         yield* client.importDump({ payload: dump })
+        yield* waitUntilImportIdle(client)
         const again = yield* client.importDump({ payload: dump })
         expect(again.imported).toBe(0)
         expect(again.updated).toBe(1)
+      }),
+    )
+  }, 30_000)
+
+  it("POST /api/imports of a second dump while stills run returns 409", async () => {
+    resetDataDir()
+    await run(
+      Effect.gen(function* () {
+        const client = yield* HttpApiTest.groups(Api, ["xkeep"])
+        yield* client.importDump({ payload: dump })
+        const second = yield* client.importDump({ payload: dump }).pipe(Effect.exit)
+        expect(second._tag).toBe("Failure")
       }),
     )
   }, 30_000)
@@ -135,6 +169,7 @@ describe.sequential("HttpApi", () => {
       disableLogger: true,
     }).pipe(
       Layer.provide(bookmarksLayer),
+      Layer.provide(Import.layer),
       Layer.provide(llamaLayerTest),
       Layer.provide(appConfigLayer),
       Layer.provideMerge(NodeHttpServer.layerTest),
