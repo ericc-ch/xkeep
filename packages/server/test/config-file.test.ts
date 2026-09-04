@@ -83,7 +83,7 @@ describe("AppConfig config file", () => {
         dataDir: "/tmp/cfg-data",
         cacheDir: "/tmp/cfg-cache",
       })
-      expect(config.sqlitePath).toBe("/tmp/cfg-data/library.sqlite")
+      expect(config.sqlitePath).toBe("/tmp/cfg-data/xkeep.sqlite")
       expect(config.mediaDir).toBe("/tmp/cfg-data/media")
       expect(config.importsDir).toBe("/tmp/cfg-data/imports")
       expect(config.ggufDir).toBe("/tmp/cfg-cache/gguf")

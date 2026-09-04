@@ -2,19 +2,19 @@ import { Effect } from "effect"
 import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi"
 import { Llama } from "../embed/llama.ts"
 import { importDump } from "../import/import-dump.ts"
-import { Library } from "../library/library.ts"
-import { search } from "../library/search.ts"
+import { Bookmarks } from "../bookmarks/bookmarks.ts"
+import { search } from "../bookmarks/search.ts"
 import { Api, ImportFailed } from "./api.ts"
 
-export const handlers = HttpApiBuilder.group(Api, "library", (group) =>
+export const handlers = HttpApiBuilder.group(Api, "xkeep", (group) =>
   group
     .handle(
       "health",
       Effect.fn("health")(
         function* () {
-          const library = yield* Library
+          const bookmarks = yield* Bookmarks
           const llama = yield* Llama
-          const counts = yield* library.counts()
+          const counts = yield* bookmarks.counts()
           const llamaState = yield* llama.state()
           return {
             status: "ok" as const,

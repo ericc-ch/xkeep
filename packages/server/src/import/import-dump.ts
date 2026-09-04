@@ -2,7 +2,7 @@ import { Data, Effect, FileSystem, Option, Path } from "effect"
 import { Headers, HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
 import { AppConfig } from "../config.ts"
 import type { BookmarkDump } from "../dump/parse-graphql.ts"
-import { Library } from "../library/library.ts"
+import { Bookmarks } from "../bookmarks/bookmarks.ts"
 import { firstStillUrl, isAllowedStillUrl, stillExtension } from "../media/still.ts"
 
 export class ImportError extends Data.TaggedError("ImportError")<{
@@ -47,7 +47,7 @@ export const importDump = Effect.fn("importDump")(function* (dump: BookmarkDump)
   const config = yield* AppConfig
   const fs = yield* FileSystem.FileSystem
   const pathMod = yield* Path.Path
-  const library = yield* Library
+  const bookmarks = yield* Bookmarks
   const fileName = `${dump.captured_at.replaceAll(":", "-")}.json`
   const dest = pathMod.join(config.importsDir, fileName)
   yield* fs
@@ -70,11 +70,11 @@ export const importDump = Effect.fn("importDump")(function* (dump: BookmarkDump)
         stillFailed += 1
       }
     }
-    const result = yield* library.upsert(bookmark, stillPath)
+    const result = yield* bookmarks.upsert(bookmark, stillPath)
     if (result === "inserted") imported += 1
     else updated += 1
   }
-  const missing = yield* library.missingEmbeddings()
+  const missing = yield* bookmarks.missingEmbeddings()
   return {
     imported,
     updated,

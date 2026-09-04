@@ -62,7 +62,7 @@ const ConfigFileSchema = Schema.Struct({
     }).pipe(
       Schema.annotate({
         title: "Listen",
-        description: "HTTP bind address for the library server.",
+        description: "HTTP bind address for the daemon.",
       }),
     ),
   ),
@@ -85,7 +85,7 @@ const ConfigFileSchema = Schema.Struct({
     }).pipe(
       Schema.annotate({
         title: "Paths",
-        description: "On-disk directories for library data and download cache.",
+        description: "On-disk directories for sqlite, media, imports, and download cache.",
       }),
     ),
   ),
@@ -118,7 +118,7 @@ const ResolvedConfigSchema = Schema.Struct({
   ),
   port: Port.pipe(Schema.annotateKey({ description: "HTTP listen port after merge." })),
   dataDir: NonBlankString.pipe(
-    Schema.annotateKey({ description: "Library data directory after merge." }),
+    Schema.annotateKey({ description: "Data directory after merge." }),
   ),
   cacheDir: NonBlankString.pipe(
     Schema.annotateKey({ description: "Download cache directory after merge." }),
@@ -252,13 +252,13 @@ export class AppConfig extends Context.Service<AppConfig>()("AppConfig", {
       dataDir,
       cacheDir,
       llamaPort,
-      sqlitePath: `${dataDir}/library.sqlite`,
+      sqlitePath: `${dataDir}/xkeep.sqlite`,
       mediaDir: `${dataDir}/media`,
       importsDir: `${dataDir}/imports`,
       llamaDir: `${cacheDir}/llama-${LLAMA_BUILD}`,
       ggufDir,
-      textGgufPath: `${ggufDir}/qwen3-vl-embedding-2b-Q4_K_M.gguf`,
-      mmprojGgufPath: `${ggufDir}/mmproj-Q8_0.gguf`,
+      textGgufPath: `${ggufDir}/Qwen3-VL-Embedding-2B.Q4_K_M.gguf`,
+      mmprojGgufPath: `${ggufDir}/Qwen3-VL-Embedding-2B.mmproj-Q8_0.gguf`,
       llamaBaseUrl: `http://127.0.0.1:${String(llamaPort)}`,
     }).pipe(
       Effect.mapError(
@@ -285,6 +285,6 @@ export const llamaReleaseUrl = (os: NodeJS.Platform): string | undefined => {
 }
 
 export const TEXT_GGUF_URL =
-  "https://huggingface.co/Rizwan313/Qwen3-VL-Embedding-2B-GGUF/resolve/main/qwen3-vl-embedding-2b-Q4_K_M.gguf"
+  "https://huggingface.co/mradermacher/Qwen3-VL-Embedding-2B-GGUF/resolve/main/Qwen3-VL-Embedding-2B.Q4_K_M.gguf"
 export const MMPROJ_GGUF_URL =
-  "https://huggingface.co/Rizwan313/Qwen3-VL-Embedding-2B-GGUF/resolve/main/mmproj-Q8_0.gguf"
+  "https://huggingface.co/mradermacher/Qwen3-VL-Embedding-2B-GGUF/resolve/main/Qwen3-VL-Embedding-2B.mmproj-Q8_0.gguf"

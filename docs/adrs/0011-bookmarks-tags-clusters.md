@@ -8,7 +8,7 @@ Accepted (2026-09-04) — grilled with Erick
 
 Plan.md talked about tags, clusters, and a canvas. Main only persisted `bookmarks`. A throwaway `canvas` branch invented stored `clusters`, `bookmark_tags`, and `cluster_id` / projection columns, and rebuilt clusters by deleting rows and reminting ids. That made "cluster" look like a durable entity and blurred it with tags. Grilling reset the nouns.
 
-"Library" is not a product noun. The pile is bookmarks. The running process is the app/daemon. The internal Effect port named `Library` may be renamed later; it must not appear as an OpenAPI resource.
+The pile is bookmarks. The running process is the app/daemon. The sqlite port for bookmark rows is the Effect service `Bookmarks`. It is not an OpenAPI resource.
 
 ## Decision
 
@@ -34,7 +34,6 @@ Auto-tag later = sample members of an ephemeral group → create/pick a tag → 
 
 ### Not domain objects
 
-- **Library** — dropped as a product/domain word.
 - **Canvas** — not an entity. A future UI may draw a cluster query; that is a view, not a table.
 - **Stored projection** — not required as user data. If `proj_x`/`proj_y` exist later, they are cache, not source of truth.
 

@@ -11,7 +11,7 @@ The HTTP server is the product. The CLI is an HTTP client. One `src/main.ts` sti
 ## Decision
 
 - `@xkeep/server` (`packages/server`): sqlite, media, embed, HTTP, dump schema, `HttpApi`. `nub run start` / `src/main.ts` still listens (`--host --port --data-dir --cache-dir`). No user-facing bin.
-- `@xkeep/cli` (`packages/cli`): user-facing bin `xkeep`. `service` owns the process. `api` is generated from `HttpApi` via `HttpApi.reflect`. `service serve` loads `@xkeep/server/run-server`. `api` / `service start|stop|status` do not import sqlite or `serverLayer`.
+- `@xkeep/cli` (`packages/cli`): user-facing bin `xkeep`. `service` owns the process. `api` is a curl-style client of the running server (`operationId` via live `/openapi.json`, or `METHOD /path`). `service serve` loads `@xkeep/server/run-server`. `api` / `service start|stop|status` do not import sqlite or `serverLayer`.
 - CLI depends on `"@xkeep/server": "workspace:*"`.
 - Server `exports`: `"."` is the serve entry; `"./api"` is `HttpApi` plus dump schemas and registration helpers; `"./run-server"` is the listen loop.
 - Root package `xkeep` is private and has no `bin`.

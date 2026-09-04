@@ -31,8 +31,8 @@ export class EmbeddingDimsError extends Data.TaggedError("EmbeddingDimsError")<{
   readonly actual: number
 }> {}
 
-export class Library extends Context.Service<
-  Library,
+export class Bookmarks extends Context.Service<
+  Bookmarks,
   {
     readonly counts: () => Effect.Effect<
       { bookmarks: number; embedded: number },
@@ -56,7 +56,7 @@ export class Library extends Context.Service<
     >
     readonly searchRows: () => Effect.Effect<ReadonlyArray<BookmarkRow>, EffectDrizzleQueryError>
   }
->()("Library") {}
+>()("Bookmarks") {}
 
 const migrationsFolder = fileURLToPath(new URL("../../drizzle", import.meta.url))
 
@@ -71,16 +71,16 @@ const sqliteLayer = Layer.unwrap(
   }),
 )
 
-const make = Effect.fn("Library.make")(function* () {
+const make = Effect.fn("Bookmarks.make")(function* () {
   const db = yield* SQLiteNodeDrizzle.makeWithDefaults()
   yield* migrate(db, { migrationsFolder })
-  return Library.of({
-    counts: Effect.fn("library.counts")(function* () {
+  return Bookmarks.of({
+    counts: Effect.fn("bookmarks.counts")(function* () {
       const nBookmarks = yield* db.$count(bookmarks)
       const embedded = yield* db.$count(bookmarks, isNotNull(bookmarks.embedding))
       return { bookmarks: nBookmarks, embedded }
     }),
-    upsert: Effect.fn("library.upsert")(function* (
+    upsert: Effect.fn("bookmarks.upsert")(function* (
       bookmark: Bookmark,
       stillPath: string | undefined,
     ) {
@@ -128,7 +128,7 @@ const make = Effect.fn("Library.make")(function* () {
         })
       return existed > 0 ? ("updated" as const) : ("inserted" as const)
     }),
-    setEmbedding: Effect.fn("library.setEmbedding")(function* (
+    setEmbedding: Effect.fn("bookmarks.setEmbedding")(function* (
       id: string,
       embedding: Float32Array,
     ) {
@@ -145,7 +145,7 @@ const make = Effect.fn("Library.make")(function* () {
         })
         .where(eq(bookmarks.id, id))
     }),
-    missingEmbeddings: Effect.fn("library.missingEmbeddings")(function* () {
+    missingEmbeddings: Effect.fn("bookmarks.missingEmbeddings")(function* () {
       const rows = yield* db
         .select({
           id: bookmarks.id,
@@ -160,7 +160,7 @@ const make = Effect.fn("Library.make")(function* () {
         stillPath: row.stillPath ?? undefined,
       }))
     }),
-    searchRows: Effect.fn("library.searchRows")(function* () {
+    searchRows: Effect.fn("bookmarks.searchRows")(function* () {
       const rows = yield* db.select().from(bookmarks)
       return rows.map((row) => ({
         id: row.id,
@@ -180,4 +180,4 @@ const make = Effect.fn("Library.make")(function* () {
   })
 })
 
-export const layer = Layer.effect(Library, make()).pipe(Layer.provide(sqliteLayer))
+export const layer = Layer.effect(Bookmarks, make()).pipe(Layer.provide(sqliteLayer))

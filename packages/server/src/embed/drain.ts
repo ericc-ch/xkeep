@@ -1,11 +1,11 @@
 import { Effect, Layer } from "effect"
 import { Llama, LlamaEmbedError, LlamaState } from "./llama.ts"
-import { Library } from "../library/library.ts"
+import { Bookmarks } from "../bookmarks/bookmarks.ts"
 
 const BATCH = 8
 
 const drainOnce = Effect.fn("drainOnce")(function* () {
-  const library = yield* Library
+  const bookmarks = yield* Bookmarks
   const llama = yield* Llama
   const state = yield* llama.state()
   return yield* LlamaState.$match(state, {
@@ -13,7 +13,7 @@ const drainOnce = Effect.fn("drainOnce")(function* () {
     unavailable: () => Effect.sleep("5 seconds"),
     ready: () =>
       Effect.gen(function* () {
-        const missing = yield* library.missingEmbeddings()
+        const missing = yield* bookmarks.missingEmbeddings()
         if (missing.length === 0) {
           yield* Effect.sleep("1 second")
           return
@@ -34,7 +34,7 @@ const drainOnce = Effect.fn("drainOnce")(function* () {
           if (row === undefined || vec === undefined) {
             return yield* new LlamaEmbedError({ reason: "embed batch index missing" })
           }
-          yield* library.setEmbedding(row.id, vec)
+          yield* bookmarks.setEmbedding(row.id, vec)
         }
       }),
   })

@@ -11,7 +11,7 @@ import { layerTest as llamaLayerTest } from "../src/embed/llama.ts"
 import { Api } from "../src/http/api.ts"
 import { handlers } from "../src/http/handlers.ts"
 import { apiLayer } from "../src/http/server.ts"
-import { layer as libraryLayer } from "../src/library/library.ts"
+import { layer as bookmarksLayer } from "../src/bookmarks/bookmarks.ts"
 import dumpJson from "./fixtures/dump.json" with { type: "json" }
 
 const dataDir = "/tmp/xkeep-e2e"
@@ -26,7 +26,7 @@ const appConfigLayer = AppConfig.layer({
 }).pipe(Layer.provide(NodeFileSystem.layer))
 
 const e2eLayer = Layer.mergeAll(handlers, drainLayer).pipe(
-  Layer.provide(libraryLayer),
+  Layer.provide(bookmarksLayer),
   Layer.provide(llamaLayerTest),
   Layer.provide(NodeHttpClient.layerNodeHttp),
   Layer.provide(appConfigLayer),
@@ -57,12 +57,12 @@ const waitUntilEmbedded = Effect.fn("waitUntilEmbedded")(function* (
   return yield* new EmbedTimeout({ reason: "embeddings did not catch up" })
 })
 
-describe.sequential("library HttpApi", () => {
-  it("GET /health is ready with an empty library", async () => {
+describe.sequential("HttpApi", () => {
+  it("GET /health is ready with no bookmarks", async () => {
     resetDataDir()
     await run(
       Effect.gen(function* () {
-        const client = yield* HttpApiTest.groups(Api, ["library"])
+        const client = yield* HttpApiTest.groups(Api, ["xkeep"])
         const health = yield* client.health()
         expect(health).toEqual({
           status: "ok",
@@ -78,7 +78,7 @@ describe.sequential("library HttpApi", () => {
     resetDataDir()
     await run(
       Effect.gen(function* () {
-        const client = yield* HttpApiTest.groups(Api, ["library"])
+        const client = yield* HttpApiTest.groups(Api, ["xkeep"])
         const result = yield* client.importDump({ payload: dump })
         expect(result.imported).toBe(1)
         expect(result.stills).toBe(1)
@@ -93,7 +93,7 @@ describe.sequential("library HttpApi", () => {
     resetDataDir()
     await run(
       Effect.gen(function* () {
-        const client = yield* HttpApiTest.groups(Api, ["library"])
+        const client = yield* HttpApiTest.groups(Api, ["xkeep"])
         yield* client.importDump({ payload: dump })
         const health = yield* waitUntilEmbedded(client)
         expect(health.embedded).toBe(health.bookmarks)
@@ -105,7 +105,7 @@ describe.sequential("library HttpApi", () => {
     resetDataDir()
     await run(
       Effect.gen(function* () {
-        const client = yield* HttpApiTest.groups(Api, ["library"])
+        const client = yield* HttpApiTest.groups(Api, ["xkeep"])
         yield* client.importDump({ payload: dump })
         yield* waitUntilEmbedded(client)
         const result = yield* client.search({ query: { q: canaryText } })
@@ -119,7 +119,7 @@ describe.sequential("library HttpApi", () => {
     resetDataDir()
     await run(
       Effect.gen(function* () {
-        const client = yield* HttpApiTest.groups(Api, ["library"])
+        const client = yield* HttpApiTest.groups(Api, ["xkeep"])
         yield* client.importDump({ payload: dump })
         const again = yield* client.importDump({ payload: dump })
         expect(again.imported).toBe(0)
@@ -134,7 +134,7 @@ describe.sequential("library HttpApi", () => {
       disableListenLog: true,
       disableLogger: true,
     }).pipe(
-      Layer.provide(libraryLayer),
+      Layer.provide(bookmarksLayer),
       Layer.provide(llamaLayerTest),
       Layer.provide(appConfigLayer),
       Layer.provideMerge(NodeHttpServer.layerTest),

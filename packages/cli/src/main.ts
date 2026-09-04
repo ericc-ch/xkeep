@@ -85,7 +85,7 @@ const command = Command.make(
 ).pipe(
   Command.withShortDescription("Local X bookmarks app"),
   Command.withDescription(
-    "Bare invocation ensures the daemon and prints its url. service manages the process. api calls HTTP.",
+    "Bare invocation ensures the daemon and prints its url. service manages the process. api is curl against the running server.",
   ),
   Command.withSubcommands([serviceCommand, apiCommand]),
 )

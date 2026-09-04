@@ -7,6 +7,7 @@ import {
   Effect,
   FileSystem,
   Layer,
+  Option,
   Path,
   Ref,
   Schema,
@@ -120,32 +121,165 @@ const stdio = {
   stderr: "inherit" as const,
 }
 
-const ensureSizedFile = Effect.fn("ensureSizedFile")(function* (
-  url: string,
-  dest: string,
-  minBytes: number,
-) {
+type SizedDownload = {
+  readonly url: string
+  readonly dest: string
+  readonly minBytes: number
+}
+
+type HubFile = {
+  readonly repo: string
+  readonly rev: string
+  readonly file: string
+}
+
+const parseHubFileUrl = (raw: string): HubFile | undefined => {
+  let parsed: URL
+  try {
+    parsed = new URL(raw)
+  } catch {
+    return undefined
+  }
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return undefined
+  if (parsed.hostname !== "huggingface.co") return undefined
+  const parts = parsed.pathname.split("/").filter((part) => part.length > 0)
+  if (parts.length < 5) return undefined
+  const org = parts[0]
+  const name = parts[1]
+  const kind = parts[2]
+  const rev = parts[3]
+  if (org === undefined || name === undefined || kind !== "resolve" || rev === undefined) {
+    return undefined
+  }
+  const file = parts.slice(4).map(decodeURIComponent).join("/")
+  if (file.length === 0) return undefined
+  return { repo: `${org}/${name}`, rev, file }
+}
+
+const findOnPath = Effect.fn("findOnPath")(function* (name: string) {
+  const fs = yield* FileSystem.FileSystem
+  const pathMod = yield* Path.Path
+  for (const dir of (process.env.PATH ?? "").split(delimiter)) {
+    if (dir.length === 0) continue
+    const candidate = pathMod.join(dir, name)
+    if (yield* fs.exists(candidate)) return Option.some(candidate)
+  }
+  return Option.none<string>()
+})
+
+const fileMeetsMin = Effect.fn("fileMeetsMin")(function* (dest: string, minBytes: number) {
+  const fs = yield* FileSystem.FileSystem
+  if (!(yield* fs.exists(dest))) return false
+  const stat = yield* fs.stat(dest)
+  return stat.size >= BigInt(minBytes)
+})
+
+const removeIfPresent = Effect.fn("removeIfPresent")(function* (dest: string) {
   const fs = yield* FileSystem.FileSystem
   if (yield* fs.exists(dest)) {
     const stat = yield* fs.stat(dest)
-    if (stat.size >= BigInt(minBytes)) return
     yield* Effect.log(`removing undersized file ${dest} (${String(stat.size)} bytes)`)
     yield* fs.remove(dest)
   }
-  yield* Effect.log(`downloading ${url} to ${dest}`)
+})
+
+const ensureSizedFile = Effect.fn("ensureSizedFile")(function* (input: SizedDownload) {
+  if (yield* fileMeetsMin(input.dest, input.minBytes)) return
+  yield* removeIfPresent(input.dest)
+  yield* Effect.log(`downloading ${input.url} to ${input.dest}`)
+  const fs = yield* FileSystem.FileSystem
   const raw = yield* HttpClient.HttpClient
   const client = HttpClient.followRedirects(10)(raw)
-  const tmp = `${dest}.part`
-  const response = yield* client.execute(HttpClientRequest.get(url))
+  const tmp = `${input.dest}.part`
+  const response = yield* client.execute(HttpClientRequest.get(input.url))
   yield* HttpClientResponse.filterStatusOk(response)
   yield* Stream.run(response.stream, fs.sink(tmp))
-  yield* fs.rename(tmp, dest)
-  const after = yield* fs.stat(dest)
-  if (after.size < BigInt(minBytes)) {
-    yield* fs.remove(dest)
+  yield* fs.rename(tmp, input.dest)
+  const after = yield* fs.stat(input.dest)
+  if (after.size < BigInt(input.minBytes)) {
+    yield* fs.remove(input.dest)
     return yield* new LlamaSetupError({
-      reason: `${dest} is ${String(after.size)} bytes, expected at least ${String(minBytes)}`,
+      reason: `${input.dest} is ${String(after.size)} bytes, expected at least ${String(input.minBytes)}`,
     })
+  }
+})
+
+const downloadWithHf = Effect.fn("downloadWithHf")(function* (input: {
+  readonly hf: string
+  readonly repo: string
+  readonly rev: string
+  readonly files: ReadonlyArray<string>
+  readonly localDir: string
+}) {
+  yield* Effect.log(
+    `downloading ${input.repo} ${input.files.join(" ")} via hf to ${input.localDir}`,
+  )
+  const handle = yield* ChildProcess.make(
+    input.hf,
+    [
+      "download",
+      input.repo,
+      ...input.files,
+      "--revision",
+      input.rev,
+      "--local-dir",
+      input.localDir,
+    ],
+    stdio,
+  )
+  const code = yield* handle.exitCode
+  if (code !== 0) {
+    yield* Effect.log(`hf download exited ${String(code)}`)
+  }
+})
+
+const ensureHubOrHttp = Effect.fn("ensureHubOrHttp")(function* (
+  items: ReadonlyArray<SizedDownload>,
+) {
+  const pathMod = yield* Path.Path
+  const pending: Array<SizedDownload> = []
+  for (const item of items) {
+    if (yield* fileMeetsMin(item.dest, item.minBytes)) continue
+    yield* removeIfPresent(item.dest)
+    pending.push(item)
+  }
+  if (pending.length === 0) return
+  const hf = yield* findOnPath("hf")
+  if (Option.isSome(hf)) {
+    const groups = new Map<
+      string,
+      { readonly repo: string; readonly rev: string; readonly localDir: string; files: Array<string> }
+    >()
+    for (const item of pending) {
+      const hub = parseHubFileUrl(item.url)
+      if (hub === undefined) continue
+      if (hub.file !== pathMod.basename(item.dest)) continue
+      const localDir = pathMod.dirname(item.dest)
+      const key = `${hub.repo}\0${hub.rev}\0${localDir}`
+      const existing = groups.get(key)
+      if (existing !== undefined) {
+        existing.files.push(hub.file)
+        continue
+      }
+      groups.set(key, { repo: hub.repo, rev: hub.rev, localDir, files: [hub.file] })
+    }
+    for (const group of groups.values()) {
+      yield* downloadWithHf({
+        hf: hf.value,
+        repo: group.repo,
+        rev: group.rev,
+        files: group.files,
+        localDir: group.localDir,
+      }).pipe(
+        Effect.catch((error) => Effect.log(`hf download failed: ${String(error)}`)),
+      )
+    }
+    for (const item of pending) {
+      if (!(yield* fileMeetsMin(item.dest, item.minBytes))) yield* removeIfPresent(item.dest)
+    }
+  }
+  for (const item of pending) {
+    yield* ensureSizedFile(item)
   }
 })
 
@@ -153,11 +287,8 @@ const ensureBinary = Effect.fn("ensureBinary")(function* (config: Config) {
   const fs = yield* FileSystem.FileSystem
   const pathMod = yield* Path.Path
   const name = platform === "win32" ? "llama-server.exe" : "llama-server"
-  for (const dir of (process.env.PATH ?? "").split(delimiter)) {
-    if (dir.length === 0) continue
-    const candidate = pathMod.join(dir, name)
-    if (yield* fs.exists(candidate)) return candidate
-  }
+  const onPath = yield* findOnPath(name)
+  if (Option.isSome(onPath)) return onPath.value
   const bin = pathMod.join(config.llamaDir, name)
   if (yield* fs.exists(bin)) return bin
   const url = llamaReleaseUrl(platform)
@@ -167,12 +298,11 @@ const ensureBinary = Effect.fn("ensureBinary")(function* (config: Config) {
   }
   yield* fs.makeDirectory(config.cacheDir, { recursive: true })
   const archive = pathMod.join(config.cacheDir, tarName)
-  yield* ensureSizedFile(url, archive, 1_000_000)
-  yield* fs.makeDirectory(config.llamaDir, { recursive: true })
+  yield* ensureSizedFile({ url, dest: archive, minBytes: 1_000_000 })
   if (platform !== "linux" && platform !== "darwin") {
     return yield* new LlamaSetupError({ reason: `no llama.cpp vulkan extract for ${platform}` })
   }
-  const tar = yield* ChildProcess.make("tar", ["-xzf", archive, "-C", config.llamaDir], stdio)
+  const tar = yield* ChildProcess.make("tar", ["-xzf", archive, "-C", config.cacheDir], stdio)
   const code = yield* tar.exitCode
   if (code !== 0) {
     return yield* new LlamaSetupError({ reason: `tar extract failed with ${String(code)}` })
@@ -269,8 +399,10 @@ const setupLlama = Effect.fn("setupLlama")(function* (
 ) {
   const fs = yield* FileSystem.FileSystem
   yield* fs.makeDirectory(config.ggufDir, { recursive: true })
-  yield* ensureSizedFile(TEXT_GGUF_URL, config.textGgufPath, MIN_TEXT_GGUF_BYTES)
-  yield* ensureSizedFile(MMPROJ_GGUF_URL, config.mmprojGgufPath, MIN_MMPROJ_GGUF_BYTES)
+  yield* ensureHubOrHttp([
+    { url: TEXT_GGUF_URL, dest: config.textGgufPath, minBytes: MIN_TEXT_GGUF_BYTES },
+    { url: MMPROJ_GGUF_URL, dest: config.mmprojGgufPath, minBytes: MIN_MMPROJ_GGUF_BYTES },
+  ])
   const bin = yield* ensureBinary(config)
   const pathMod = yield* Path.Path
   const dir = pathMod.dirname(bin)

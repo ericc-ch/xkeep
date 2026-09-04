@@ -132,7 +132,7 @@ source of truth is files:
 
 ```
 ~/.local/share/xkeep/
-  library.sqlite
+  xkeep.sqlite
   media/
   models/          # unused; GGUF lives in the cache dir
   imports/         # raw json drops, keep them

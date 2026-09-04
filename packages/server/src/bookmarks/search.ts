@@ -1,7 +1,7 @@
 import { Effect } from "effect"
 import { EMBED_DIMS } from "../config.ts"
 import { Llama } from "../embed/llama.ts"
-import { Library } from "../library/library.ts"
+import { Bookmarks } from "./bookmarks.ts"
 
 export type SearchHit = {
   readonly id: string
@@ -31,7 +31,7 @@ const cosine = (a: Float32Array, b: Float32Array): number => {
 }
 
 export const search = Effect.fn("search")(function* (q: string) {
-  const library = yield* Library
+  const bookmarks = yield* Bookmarks
   const llama = yield* Llama
   const qvecs = yield* llama.embed([{ text: q, stillPath: undefined }], "query")
   const qvec = qvecs[0]
@@ -39,7 +39,7 @@ export const search = Effect.fn("search")(function* (q: string) {
     return { hits: [] as Array<SearchHit> }
   }
   const scored: Array<SearchHit> = []
-  const rows = yield* library.searchRows()
+  const rows = yield* bookmarks.searchRows()
   for (const row of rows) {
     if (row.embedding === undefined) continue
     const vec = asFloat32(row.embedding)

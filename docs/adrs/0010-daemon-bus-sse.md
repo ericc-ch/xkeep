@@ -99,7 +99,7 @@ On `service start` / bare / restart spawn:
 | `xkeep service stop`    | Stop the registered daemon                                                                                                                                                                                                                                               |
 | `xkeep service restart` | Stop then start; must not silently reuse an unresponsive incumbent                                                                                                                                                                                                       |
 | `xkeep service status`  | Registration + health                                                                                                                                                                                                                                                    |
-| `xkeep api …`           | Generated 1:1 from `HttpApi` (`HttpApi.reflect`). Top-level endpoints are `api <id>`. Other groups are `api <group> <id>`. Query/path → flags; JSON body → `--file` (`-` = stdin). Stdout JSON. Skip SSE/stream endpoints. Adding an HttpApi endpoint is the CLI change. |
+| `xkeep api …`           | One command. `METHOD /path` or OpenAPI `operationId` (resolved from live `GET /openapi.json`). `--param key=value` fills `{path}` then leftover query. `--data` / `-d` is the body (`@file` or `@-` for stdin). `--header` / `-H` `name:value`. Stdout is the response body. Does not spawn. |
 
 Exiting the CLI or closing the browser does not stop the daemon. Only `service stop`, an explicit kill, or reboot does (user-level systemd/launchd for reboot persistence is optional later, not v1).
 
@@ -110,7 +110,7 @@ This revises ADR 0008's "CLI reads no discovery file": the CLI may read `service
 ### Packages (directional)
 
 - Server gains: bus module, `GET /events`, daemon registration (`service.json`), tag tree + cluster query APIs (ADR 0011).
-- Single bin gains: `service *` (ensure/spawn only here and on bare); `api` generated from `HttpApi`.
+- Single bin gains: `service *` (ensure/spawn only here and on bare); `api` as a curl-style OpenAPI client.
 - UI (when real, not throwaway experiments): REST snapshot + EventSource; same mutation endpoints. Out of the first ship slice.
 
 ### Ship order

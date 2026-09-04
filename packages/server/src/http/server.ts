@@ -6,7 +6,7 @@ import { HttpRouter } from "effect/unstable/http"
 import { HttpApiBuilder, HttpApiScalar } from "effect/unstable/httpapi"
 import { drainLayer } from "../embed/drain.ts"
 import { layer as llamaLayer } from "../embed/llama.ts"
-import { layer as libraryLayer } from "../library/library.ts"
+import { layer as bookmarksLayer } from "../bookmarks/bookmarks.ts"
 import { Api } from "./api.ts"
 import { handlers } from "./handlers.ts"
 
@@ -20,7 +20,7 @@ export const serverLayer = Layer.unwrap(
     return HttpRouter.serve(
       Layer.mergeAll(apiLayer, HttpApiScalar.layer(Api, { path: "/docs" }), drainLayer),
     ).pipe(
-      Layer.provide(libraryLayer),
+      Layer.provide(bookmarksLayer),
       Layer.provide(llamaLayer),
       Layer.provide(NodeHttpClient.layerNodeHttp),
       Layer.provideMerge(

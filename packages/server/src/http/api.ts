@@ -50,9 +50,9 @@ export const SearchResult = Schema.Struct({
 
 export const Api = HttpApi.make("xkeep")
   .annotate(OpenApi.Title, "xkeep")
-  .annotate(OpenApi.Description, "Local X bookmarks library")
+  .annotate(OpenApi.Description, "Local X bookmarks")
   .add(
-    HttpApiGroup.make("library", { topLevel: true })
+    HttpApiGroup.make("xkeep", { topLevel: true })
       .add(
         HttpApiEndpoint.get("health", "/health", {
           success: Health,
