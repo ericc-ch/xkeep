@@ -5,11 +5,9 @@ import { EffectDrizzleQueryError } from "drizzle-orm/effect-core/errors"
 import * as SQLiteNodeDrizzle from "drizzle-orm/effect-sqlite-node"
 import { migrate } from "drizzle-orm/effect-sqlite-node/migrator"
 import { Context, Data, Effect, FileSystem, Layer } from "effect"
-import type { Bookmark } from "../dump/parse-graphql.ts"
+import type { Bookmark } from "../schema.ts"
 import { AppConfig, EMBED_DIMS } from "../config.ts"
 import { bookmarks } from "./schema.ts"
-
-export { EffectDrizzleQueryError }
 
 export type BookmarkRow = {
   readonly id: string
@@ -22,8 +20,22 @@ export type BookmarkRow = {
   readonly hashtagsJson: string
   readonly urlsJson: string
   readonly quotedJson: string | undefined
-  readonly stillPath: string | undefined
+  readonly stillPaths: ReadonlyArray<string>
   readonly embedding: Uint8Array | undefined
+}
+
+const stillPathsJson = (paths: ReadonlyArray<string>): string | null =>
+  paths.length === 0 ? null : JSON.stringify(paths)
+
+const parseStillPaths = (value: string | null): ReadonlyArray<string> => {
+  if (value === null) return []
+  try {
+    const parsed: unknown = JSON.parse(value)
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((item) => typeof item === "string")
+  } catch {
+    return []
+  }
 }
 
 export class EmbeddingDimsError extends Data.TaggedError("EmbeddingDimsError")<{
@@ -40,7 +52,7 @@ export class Bookmarks extends Context.Service<
     >
     readonly upsert: (
       bookmark: Bookmark,
-      stillPath: string | undefined,
+      stillPaths: ReadonlyArray<string>,
     ) => Effect.Effect<"inserted" | "updated", EffectDrizzleQueryError>
     readonly setEmbedding: (
       id: string,
@@ -50,7 +62,7 @@ export class Bookmarks extends Context.Service<
       ReadonlyArray<{
         readonly id: string
         readonly text: string
-        readonly stillPath: string | undefined
+        readonly stillPaths: ReadonlyArray<string>
       }>,
       EffectDrizzleQueryError
     >
@@ -82,7 +94,7 @@ const make = Effect.fn("Bookmarks.make")(function* () {
     }),
     upsert: Effect.fn("bookmarks.upsert")(function* (
       bookmark: Bookmark,
-      stillPath: string | undefined,
+      stillPaths: ReadonlyArray<string>,
     ) {
       const existing = yield* db
         .select({ n: count() })
@@ -102,7 +114,7 @@ const make = Effect.fn("Bookmarks.make")(function* () {
           hashtagsJson: JSON.stringify(bookmark.hashtags),
           urlsJson: JSON.stringify(bookmark.urls),
           quotedJson: bookmark.quoted === undefined ? null : JSON.stringify(bookmark.quoted),
-          stillPath: stillPath ?? null,
+          stillPaths: stillPathsJson(stillPaths),
         })
         .onConflictDoUpdate({
           target: bookmarks.id,
@@ -116,11 +128,11 @@ const make = Effect.fn("Bookmarks.make")(function* () {
             hashtagsJson: sql`excluded.hashtags_json`,
             urlsJson: sql`excluded.urls_json`,
             quotedJson: sql`excluded.quoted_json`,
-            stillPath: sql`COALESCE(excluded.still_path, ${bookmarks.stillPath})`,
+            stillPaths: sql`COALESCE(excluded.still_paths, ${bookmarks.stillPaths})`,
             embedding: sql`CASE
           WHEN ${bookmarks.text} = excluded.text
            AND ${bookmarks.mediaJson} = excluded.media_json
-           AND COALESCE(excluded.still_path, ${bookmarks.stillPath}) IS ${bookmarks.stillPath}
+           AND COALESCE(excluded.still_paths, ${bookmarks.stillPaths}) IS ${bookmarks.stillPaths}
           THEN ${bookmarks.embedding}
           ELSE NULL
         END`,
@@ -150,14 +162,14 @@ const make = Effect.fn("Bookmarks.make")(function* () {
         .select({
           id: bookmarks.id,
           text: bookmarks.text,
-          stillPath: bookmarks.stillPath,
+          stillPaths: bookmarks.stillPaths,
         })
         .from(bookmarks)
         .where(isNull(bookmarks.embedding))
       return rows.map((row) => ({
         id: row.id,
         text: row.text,
-        stillPath: row.stillPath ?? undefined,
+        stillPaths: parseStillPaths(row.stillPaths),
       }))
     }),
     searchRows: Effect.fn("bookmarks.searchRows")(function* () {
@@ -173,7 +185,7 @@ const make = Effect.fn("Bookmarks.make")(function* () {
         hashtagsJson: row.hashtagsJson,
         urlsJson: row.urlsJson,
         quotedJson: row.quotedJson ?? undefined,
-        stillPath: row.stillPath ?? undefined,
+        stillPaths: parseStillPaths(row.stillPaths),
         embedding: row.embedding ?? undefined,
       }))
     }),

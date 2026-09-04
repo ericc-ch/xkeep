@@ -11,6 +11,6 @@ export const bookmarks = sqliteTable("bookmarks", {
   hashtagsJson: text("hashtags_json").notNull(),
   urlsJson: text("urls_json").notNull(),
   quotedJson: text("quoted_json"),
-  stillPath: text("still_path"),
+  stillPaths: text("still_paths"),
   embedding: blob("embedding", { mode: "buffer" }),
 })

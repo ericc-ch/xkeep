@@ -18,7 +18,7 @@ this is for one person (erick), on gl503ge (i7-8750h) + arc b580. qwen3-vl-embed
 
 pieces exist. this combo does not:
 
-local **qwen3-vl-embedding** (tweet text + first still in one fused vector, nothing leaves the machine) + **cluster canvas** + **no saas**.
+local **qwen3-vl-embedding** (tweet text + stills in one fused vector, nothing leaves the machine) + **cluster canvas** + **no saas**.
 
 one backend: **qwen3-vl-embedding-2b** through official vulkan `llama-server` (GGUF Q4_K_M + mmproj Q8_0). jina-clip-v2 was measured and dropped (separate text/image spaces, cc by-nc). python is not in the product path.
 
@@ -90,7 +90,7 @@ in:
 - shadow-copy: x still has them. we never unbookmark
 - file intake (bookmarklet + console snippet + drag-drop). incremental import, dedupe on tweet id
 - sqlite + media dir on disk, default `~/.local/share/xkeep/`
-- embed: `Qwen/Qwen3-VL-Embedding-2B` via official vulkan `llama-server` (b10752). fused text+first-still vector, 2048-d stored
+- embed: `Qwen/Qwen3-VL-Embedding-2B` via official vulkan `llama-server` (b10752). fused text+stills vector (all photos, or video/gif poster), 2048-d stored
 - search is the front door (semantic + keyword)
 - filters: author, media type (text / image / video / article / link), date, tags
 - auto tags from clusters. manual override. no llm pass
@@ -150,7 +150,7 @@ one backend. validated on gl503ge (2026-09-02). see `docs/adrs/0001-qwen-llamacp
 
 - `Qwen3-VL-Embedding-2B` GGUF Q4_K_M + mmproj Q8_0 through official `llama-server` vulkan (pinned b10752)
 - use PATH `llama-server` if present, else fetch the pinned build into cache
-- one fused vector per bookmark (text + first still). store 2048-d
+- one fused vector per bookmark (text + stills: all photos, or video/gif poster). store 2048-d
 - `--embedding --pooling last --embd-normalize 2`; image cap 256 tokens; prompt cache off
 - drain loop in the app process: wait until llama is ready, embed rows with a null blob, retry after errors
 - search: query text → embedding → brute-force cosine over an in-memory matrix. no vector index in v1

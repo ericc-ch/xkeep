@@ -20,7 +20,7 @@ const drainOnce = Effect.fn("drainOnce")(function* () {
         }
         const chunk = missing.slice(0, BATCH)
         const vectors = yield* llama.embed(
-          chunk.map((row) => ({ text: row.text, stillPath: row.stillPath })),
+          chunk.map((row) => ({ text: row.text, stillPaths: row.stillPaths })),
           "document",
         )
         if (vectors.length !== chunk.length) {

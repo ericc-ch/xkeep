@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-09-02); amended 2026-09-04 (one user-facing bin, ADR 0010).
+Accepted (2026-09-02); amended 2026-09-04 (one user-facing bin, ADR 0010); amended 2026-09-04 (server is library-only); amended 2026-09-04 (exports + CLI-owned `service.json`, ADR 0012).
 
 ## Context
 
@@ -10,11 +10,11 @@ The HTTP server is the product. The CLI is an HTTP client. One `src/main.ts` sti
 
 ## Decision
 
-- `@xkeep/server` (`packages/server`): sqlite, media, embed, HTTP, dump schema, `HttpApi`. `nub run start` / `src/main.ts` still listens (`--host --port --data-dir --cache-dir`). No user-facing bin.
-- `@xkeep/cli` (`packages/cli`): user-facing bin `xkeep`. `service` owns the process. `api` is a curl-style client of the running server (`operationId` via live `/openapi.json`, or `METHOD /path`). `service serve` loads `@xkeep/server/run-server`. `api` / `service start|stop|status` do not import sqlite or `serverLayer`.
+- `@xkeep/server` (`packages/server`): sqlite, media, embed, HTTP, dump schema, `HttpApi`. Library only: no shebang, no `Command`, no `bin`.
+- `@xkeep/cli` (`packages/cli`): user-facing bin `xkeep`. Owns argv and `service.json`. `service` owns the process. `api` is a curl-style client of the running server (`operationId` via live `/api/openapi.json`, or `METHOD /path`). `service serve` lazy-imports `@xkeep/server` (`layer`). `api` / `service start|stop|status` do not import sqlite.
 - CLI depends on `"@xkeep/server": "workspace:*"`.
-- Server `exports`: `"."` is the serve entry; `"./api"` is `HttpApi` plus dump schemas and registration helpers; `"./run-server"` is the listen loop.
-- Root package `xkeep` is private and has no `bin`.
+- Server `exports`: `"."` is `layer(overrides)`; `"./schema"` is HTTP wire schemas. No `./api`, no `./run-server`.
+- Root package `xkeep` is private and has no `bin`. `nub run start` is `xkeep service serve`.
 
 ## Consequences
 

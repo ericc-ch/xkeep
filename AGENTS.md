@@ -3,7 +3,7 @@ xkeep is a local X bookmarks app. Nub + Effect. Product shape is in `docs/PLAN.m
 ## Architecture (directional)
 
 - **Server** — `packages/server`: Effect HTTP on localhost. sqlite via Drizzle + `@effect/sql-sqlite-node`, embed worker, `HttpApi`. v1 intake is a json file. No paid X API. No chrome extension in v1.
-- **CLI** — `packages/cli`: user-facing `xkeep` bin. `service *` manages the daemon. `api` is curl against the running server (`GET /openapi.json` for operation ids). `service serve` loads `@xkeep/server/run-server`.
+- **CLI** — `packages/cli`: user-facing `xkeep` bin. `service *` manages the daemon and `service.json`. `api` is curl against the running server (`GET /api/openapi.json` for operation ids). `service serve` loads `@xkeep/server` (`layer`).
 - **References sync** — `scripts/references.ts`: shallow-clones upstream sources into `/tmp/references/`.
 
 Use Nub as package manager (`nub install`).
@@ -17,7 +17,7 @@ For TypeScript style, follow the code-conventions skill.
 
 ## Workspace
 
-- `packages/server` — HTTP daemon (`drizzle/` migrations, `db:generate`)
+- `packages/server` — HTTP library (`drizzle/` migrations, `db:generate`)
 - `packages/cli` — user-facing bin (`service`, `api`)
 - `scripts/` — install-time tooling (`references.ts`)
 - `docs/PLAN.md` — product shape

@@ -5,7 +5,7 @@ import { Data, Effect, FileSystem, Layer, Schema } from "effect"
 import { HttpClient, HttpClientRequest, HttpRouter } from "effect/unstable/http"
 import { HttpApiClient, HttpApiTest } from "effect/unstable/httpapi"
 import { AppConfig } from "../src/config.ts"
-import { BookmarkDump } from "../src/dump/parse-graphql.ts"
+import { BookmarkDump } from "../src/schema.ts"
 import { drainLayer } from "../src/embed/drain.ts"
 import { layerTest as llamaLayerTest } from "../src/embed/llama.ts"
 import { Api } from "../src/http/api.ts"
@@ -58,7 +58,7 @@ const waitUntilEmbedded = Effect.fn("waitUntilEmbedded")(function* (
 })
 
 describe.sequential("HttpApi", () => {
-  it("GET /health is ready with no bookmarks", async () => {
+  it("GET /api/health is ready with no bookmarks", async () => {
     resetDataDir()
     await run(
       Effect.gen(function* () {
@@ -74,7 +74,7 @@ describe.sequential("HttpApi", () => {
     )
   }, 30_000)
 
-  it("POST /imports downloads a still", async () => {
+  it("POST /api/imports downloads a still", async () => {
     resetDataDir()
     await run(
       Effect.gen(function* () {
@@ -84,12 +84,12 @@ describe.sequential("HttpApi", () => {
         expect(result.stills).toBe(1)
         expect(result.stillFailed).toBe(0)
         const fs = yield* FileSystem.FileSystem
-        expect(yield* fs.exists(`${dataDir}/media/${canaryId}.jpg`)).toBe(true)
+        expect(yield* fs.exists(`${dataDir}/media/${canaryId}-0.jpg`)).toBe(true)
       }),
     )
   }, 30_000)
 
-  it("polls /health until embeddings catch up", async () => {
+  it("polls /api/health until embeddings catch up", async () => {
     resetDataDir()
     await run(
       Effect.gen(function* () {
@@ -101,7 +101,7 @@ describe.sequential("HttpApi", () => {
     )
   }, 30_000)
 
-  it("GET /search ranks the imported tweet first", async () => {
+  it("GET /api/search ranks the imported tweet first", async () => {
     resetDataDir()
     await run(
       Effect.gen(function* () {
@@ -115,7 +115,7 @@ describe.sequential("HttpApi", () => {
     )
   }, 30_000)
 
-  it("POST /imports of the same ids reports updated", async () => {
+  it("POST /api/imports of the same ids reports updated", async () => {
     resetDataDir()
     await run(
       Effect.gen(function* () {
@@ -128,7 +128,7 @@ describe.sequential("HttpApi", () => {
     )
   }, 30_000)
 
-  it("POST /imports with a bad payload returns 400", async () => {
+  it("POST /api/imports with a bad payload returns 400", async () => {
     resetDataDir()
     const listenLayer = HttpRouter.serve(apiLayer, {
       disableListenLog: true,
@@ -144,7 +144,7 @@ describe.sequential("HttpApi", () => {
         Effect.gen(function* () {
           const client = yield* HttpClient.HttpClient
           const response = yield* client.execute(
-            HttpClientRequest.post("/imports").pipe(
+            HttpClientRequest.post("/api/imports").pipe(
               HttpClientRequest.bodyText("{}", "application/json"),
             ),
           )

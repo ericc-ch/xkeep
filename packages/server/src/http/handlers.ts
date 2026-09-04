@@ -4,7 +4,8 @@ import { Llama } from "../embed/llama.ts"
 import { importDump } from "../import/import-dump.ts"
 import { Bookmarks } from "../bookmarks/bookmarks.ts"
 import { search } from "../bookmarks/search.ts"
-import { Api, ImportFailed } from "./api.ts"
+import { ImportFailed } from "../schema.ts"
+import { Api } from "./api.ts"
 
 export const handlers = HttpApiBuilder.group(Api, "xkeep", (group) =>
   group

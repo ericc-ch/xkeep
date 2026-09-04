@@ -14,4 +14,4 @@ Ship one embed backend: Qwen3-VL-Embedding-2B through official Vulkan `llama-ser
 
 ## Consequences
 
-Install must fetch or locate a pinned Vulkan `llama-server` and GGUF+mmproj (default Q4_K_M + mmproj Q8_0). Embed requires a first still on disk. Prompt cache on llama-server should stay off (OOM on this box).
+Install must fetch or locate a pinned Vulkan `llama-server` and GGUF+mmproj (default Q4_K_M + mmproj Q8_0). Embed uses on-disk stills (all photos, or a video/gif poster). Prompt cache on llama-server should stay off (OOM on this box).

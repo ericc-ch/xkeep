@@ -11,7 +11,7 @@
     "format": "oxfmt",
     "lint": "oxlint --fix",
     "prepare": "effect-language-service patch && nub scripts/references.ts",
-    "start": "nub run --filter @xkeep/server start",
+    "start": "nub run --filter @xkeep/cli start",
     "test": "vitest run",
     "typecheck": "tsc -b"
   },

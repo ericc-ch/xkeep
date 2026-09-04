@@ -15,7 +15,7 @@ The bookmarks sqlite port talked to `node:sqlite` with a `CREATE TABLE` string, 
 - `sqliteTable` is the SQL shape. No Effect Schema decode of sqlite rows. `BookmarkRow` stays on `Bookmarks`.
 - SQL failures leak as `EffectDrizzleQueryError` / `SqlError` / `MigratorInitError`. Wrong embedding length is `EmbeddingDimsError`. Handlers map those to HTTP 500. No wrapper error type.
 - drizzle-kit generates into `packages/server/drizzle/`. `Bookmarks` boot runs `migrate()`. This cut wipes existing sqlite (e2e already wipes). Later schema changes are kit generate + migrate, not a baseline stamp.
-- Re-import upsert still nulls `embedding` unless text, media JSON, and still path are unchanged.
+- Re-import upsert still nulls `embedding` unless text, media JSON, and still paths are unchanged.
 
 ## Consequences
 

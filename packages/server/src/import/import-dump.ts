@@ -1,9 +1,9 @@
 import { Data, Effect, FileSystem, Option, Path } from "effect"
 import { Headers, HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
 import { AppConfig } from "../config.ts"
-import type { BookmarkDump } from "../dump/parse-graphql.ts"
+import type { BookmarkDump } from "../schema.ts"
 import { Bookmarks } from "../bookmarks/bookmarks.ts"
-import { firstStillUrl, isAllowedStillUrl, stillExtension } from "../media/still.ts"
+import { isAllowedStillUrl, stillExtension, stillUrls } from "../media/still.ts"
 
 export class ImportError extends Data.TaggedError("ImportError")<{
   readonly reason: string
@@ -58,19 +58,21 @@ export const importDump = Effect.fn("importDump")(function* (dump: BookmarkDump)
   let stills = 0
   let stillFailed = 0
   for (const bookmark of dump.bookmarks) {
-    const url = firstStillUrl(bookmark)
-    let stillPath: string | undefined
-    if (url !== undefined) {
-      const destStill = pathMod.join(config.mediaDir, `${bookmark.id}${stillExtension(url)}`)
+    const stillPaths: Array<string> = []
+    for (const [i, url] of stillUrls(bookmark).entries()) {
+      const destStill = pathMod.join(
+        config.mediaDir,
+        `${bookmark.id}-${String(i)}${stillExtension(url)}`,
+      )
       const downloaded = yield* downloadStill(url, destStill).pipe(Effect.option)
       if (Option.isSome(downloaded)) {
-        stillPath = downloaded.value
+        stillPaths.push(downloaded.value)
         stills += 1
       } else {
         stillFailed += 1
       }
     }
-    const result = yield* bookmarks.upsert(bookmark, stillPath)
+    const result = yield* bookmarks.upsert(bookmark, stillPaths)
     if (result === "inserted") imported += 1
     else updated += 1
   }

@@ -9,7 +9,7 @@ export type SearchHit = {
   readonly author: string
   readonly text: string
   readonly score: number
-  readonly stillPath?: string
+  readonly stillPaths?: ReadonlyArray<string>
 }
 
 const asFloat32 = (bytes: Uint8Array): Float32Array | undefined => {
@@ -33,7 +33,7 @@ const cosine = (a: Float32Array, b: Float32Array): number => {
 export const search = Effect.fn("search")(function* (q: string) {
   const bookmarks = yield* Bookmarks
   const llama = yield* Llama
-  const qvecs = yield* llama.embed([{ text: q, stillPath: undefined }], "query")
+  const qvecs = yield* llama.embed([{ text: q, stillPaths: [] }], "query")
   const qvec = qvecs[0]
   if (qvec === undefined || qvec.length !== EMBED_DIMS) {
     return { hits: [] as Array<SearchHit> }
@@ -51,8 +51,8 @@ export const search = Effect.fn("search")(function* (q: string) {
       text: row.text,
       score: cosine(qvec, vec),
     }
-    if (row.stillPath !== undefined) {
-      scored.push({ ...hit, stillPath: row.stillPath })
+    if (row.stillPaths.length > 0) {
+      scored.push({ ...hit, stillPaths: row.stillPaths })
     } else {
       scored.push(hit)
     }

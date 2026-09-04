@@ -1,5 +1,6 @@
 import { Console, Effect, FileSystem, Option } from "effect"
 import { Argument, Command, Flag } from "effect/unstable/cli"
+import { OPENAPI_PATH } from "@xkeep/server/schema"
 import { CliError, discoverServer } from "./ensure.ts"
 
 const methods = new Set(["delete", "get", "head", "options", "patch", "post", "put"])
@@ -60,7 +61,7 @@ const resolveRequest = Effect.fn("resolveRequest")(function* (
   }
   const operationId = input[0]
   const response = yield* Effect.tryPromise({
-    try: () => fetch(new URL("/openapi.json", `${baseUrl.replace(/\/$/, "")}/`)),
+    try: () => fetch(new URL(OPENAPI_PATH, `${baseUrl.replace(/\/$/, "")}/`)),
     catch: (cause) => new CliError({ reason: String(cause) }),
   })
   if (!response.ok) {

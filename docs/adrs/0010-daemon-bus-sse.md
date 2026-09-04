@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-09-04); amended same day after grilling (bins, auth, events, bare command). Domain nouns: ADR 0011.
+Accepted (2026-09-04); amended same day after grilling (bins, auth, events, bare command); amended 2026-09-04 (`service.json` is CLI-owned, ADR 0012).
 
 ## Context
 
@@ -21,7 +21,7 @@ Inspiration: anomalyco/opencode (v2). Two layers there are easy to conflate:
 
 xkeep is not a chat transcript. Cluster renames, tags, imports, and embed progress do not need replayable aggregates or rebuilding the DB from a log. Full event sourcing (every mutation is an event, tables are projections) is rejected for v1: one user, one sqlite file, derived embed work would fight an append log, and OpenAPI stays request/response for mutations. Domain nouns: ADR 0011.
 
-ADR 0008 parked "server-written discovery" for the CLI URL. That is revisited here: the managed daemon _is_ that discovery, via health + a state-dir registration file, not by deriving URL from the server config file.
+ADR 0008 parked "server-written discovery" for the CLI URL. That is revisited here: the managed daemon _is_ that discovery, via health + a CLI-owned state-dir registration file, not by deriving URL from the server config file.
 
 ## Decision
 
@@ -36,16 +36,16 @@ cli / web  --HTTP mutation-->  server writes sqlite
                                  |
                        +---------+---------+
                        |                   |
-                    GET /events          other fibers
+                    GET /api/events      other fibers
                        |                   (drain, etc.)
                       web applies / refetches
 ```
 
 ### OpenAPI
 
-- Keep Effect `HttpApi` as the contract. Reads and mutations stay REST (GET/POST/PUT/PATCH) and appear in OpenAPI.
-- Add one streaming endpoint, `GET /events` (SSE). Document it as SSE in the spec; do not invent a second RPC surface.
-- CLI and web both use `@xkeep/server/api` (or the generated client). No sqlite imports in clients (ADR 0005).
+- Keep Effect `HttpApi` as the contract. Reads and mutations stay REST (GET/POST/PUT/PATCH) and appear in OpenAPI. Mount the API under `/api` so `/` stays free for the library UI (`/api/health`, `/api/openapi.json`, `/api/docs`).
+- Add one streaming endpoint, `GET /api/events` (SSE). Document it as SSE in the spec; do not invent a second RPC surface.
+- CLI and web both use HTTP (and `@xkeep/server/schema` for types). No sqlite imports in clients (ADR 0005, 0012).
 
 ### In-process bus (not event sourcing)
 
@@ -58,9 +58,9 @@ cli / web  --HTTP mutation-->  server writes sqlite
 
 ### SSE (not WebSocket)
 
-- `GET /events` subscribes to the bus and streams SSE (Effect `Sse.encode` or equivalent).
+- `GET /api/events` subscribes to the bus and streams SSE (Effect `Sse.encode` or equivalent).
 - On connect: emit `server.connected`, then live events; optional heartbeat.
-- Web on boot: REST snapshot, then `EventSource("/events")`. On event: patch local state or refetch the affected resource. On reconnect: snapshot again, then resubscribe (no Last-Event-ID replay on the live stream).
+- Web on boot: REST snapshot, then `EventSource("/api/events")`. On event: patch local state or refetch the affected resource. On reconnect: snapshot again, then resubscribe (no Last-Event-ID replay on the live stream).
 - CLI does **not** subscribe. It is one-shot: mutate, print, exit.
 - WebSocket rejected: traffic is server → client; mutations already use HTTP; SSE stays on the existing HTTP stack and reconnects via `EventSource`.
 
@@ -74,32 +74,32 @@ Copy opencode's _lifecycle idea_, not its multi-contender election (many clients
 
 **Auth:** trust loopback. No password in `service.json` (pid/host/port/url/startedAt only). Revisit if bind leaves `127.0.0.1`.
 
-**Bare `xkeep` (no subcommand):** ensure daemon, print the url. Do **not** open a browser until a real UI package exists (do not train landing on `/docs`).
+**Bare `xkeep` (no subcommand):** ensure daemon, print the ready banner (art, pid when registered, origin, `/api/`, `xkeep api` example). Do not print llama state: HTTP is up while setup is still forked, so it would almost always say starting. Do **not** open a browser until a real UI package exists (do not train landing on `/api/docs`).
 
-**Ensure URL** (bare + `service start` / `restart`): `--url` if set → probe that URL only (do not spawn). Else a `service.json` whose pid is alive and `GET /health` is HTTP 200 with `status: ok`. Else default `http://127.0.0.1:8787`. Else spawn detached `xkeep service serve`. Do not wait for `llama: ready`.
+**Ensure URL** (bare + `service start` / `restart`): `--url` if set → probe that URL only (do not spawn). Else a `service.json` whose pid is alive and `GET /api/health` is HTTP 200 with `status: ok`. Else default `http://127.0.0.1:8787`. Else spawn detached `xkeep service serve`. Do not wait for `llama: ready`.
 
 **`api` URL** (no spawn): same probe order, then fail with “run `xkeep service start`” if nothing is up.
 
-Foreground `service serve` writes the same `service.json`. `service stop` may stop a debug serve.
+Foreground `service serve` writes `service.json` (CLI, after `AppConfig` resolves). `service stop` may stop a debug serve.
 
 On `service start` / bare / restart spawn:
 
 1. Probe as in **Ensure URL** above.
 2. If healthy → use it.
-3. If not (and `--url` was not set) → spawn **detached** `xkeep service serve`, **unref** the child, poll until `service.json` + `/health` are ready (or fail with a stderr tail).
+3. If not (and `--url` was not set) → spawn **detached** `xkeep service serve`, **unref** the child, poll until `service.json` + `/api/health` are ready (or fail with a stderr tail).
 4. If bind fails because something else already took the port, re-probe health and attach; do not run a voting/election protocol. If the occupant is not our health payload, fail with a clear message; do not kill strangers.
 
 ### CLI surface
 
 | Command                       | Role                                                                                                                                                                                                                                                                     |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `xkeep`                 | Ensure daemon, print url                                                                                                                                                                                                                                                 |
-| `xkeep service serve`   | Foreground server (debug)                                                                                                                                                                                                                                                |
+| `xkeep`                 | Ensure daemon, print ready banner                                                                                                                                                                        |
+| `xkeep service serve`   | Foreground server (debug); print the same banner after listen                                                                                                                                           |
 | `xkeep service start`   | Ensure daemon running                                                                                                                                                                                                                                                    |
 | `xkeep service stop`    | Stop the registered daemon                                                                                                                                                                                                                                               |
 | `xkeep service restart` | Stop then start; must not silently reuse an unresponsive incumbent                                                                                                                                                                                                       |
 | `xkeep service status`  | Registration + health                                                                                                                                                                                                                                                    |
-| `xkeep api …`           | One command. `METHOD /path` or OpenAPI `operationId` (resolved from live `GET /openapi.json`). `--param key=value` fills `{path}` then leftover query. `--data` / `-d` is the body (`@file` or `@-` for stdin). `--header` / `-H` `name:value`. Stdout is the response body. Does not spawn. |
+| `xkeep api …`           | One command. `METHOD /path` or OpenAPI `operationId` (resolved from live `GET /api/openapi.json`). `--param key=value` fills `{path}` then leftover query. `--data` / `-d` is the body (`@file` or `@-` for stdin). `--header` / `-H` `name:value`. Stdout is the response body. Does not spawn. |
 
 Exiting the CLI or closing the browser does not stop the daemon. Only `service stop`, an explicit kill, or reboot does (user-level systemd/launchd for reboot persistence is optional later, not v1).
 
@@ -109,14 +109,14 @@ This revises ADR 0008's "CLI reads no discovery file": the CLI may read `service
 
 ### Packages (directional)
 
-- Server gains: bus module, `GET /events`, daemon registration (`service.json`), tag tree + cluster query APIs (ADR 0011).
-- Single bin gains: `service *` (ensure/spawn only here and on bare); `api` as a curl-style OpenAPI client.
+- Server gains: bus module, `GET /api/events`, tag tree + cluster query APIs (ADR 0011).
+- Single bin gains: `service *` (ensure/spawn only here and on bare); `api` as a curl-style OpenAPI client; `service.json` IO.
 - UI (when real, not throwaway experiments): REST snapshot + EventSource; same mutation endpoints. Out of the first ship slice.
 
 ### Ship order
 
-1. Daemon ensure + `service *` + `api` from HttpApi (no bus/sse yet); bare command prints url.
-2. Bus + `GET /events` (prove with curl / EventSource).
+1. Daemon ensure + `service *` + `api` from HttpApi (no bus/sse yet); bare command prints the ready banner.
+2. Bus + `GET /api/events` (prove with curl / EventSource).
 3. Tag tree + bookmark-tag APIs + ephemeral cluster query.
 4. Real web UI later.
 

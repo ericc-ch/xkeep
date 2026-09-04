@@ -4,12 +4,10 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/main.ts",
-    "./api": "./src/api.ts",
-    "./run-server": "./src/run-server.ts"
+    ".": "./src/http/server.ts",
+    "./schema": "./src/schema.ts"
   },
   "scripts": {
-    "start": "nub src/main.ts",
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {

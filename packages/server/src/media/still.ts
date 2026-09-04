@@ -1,10 +1,15 @@
-import type { Bookmark } from "../dump/parse-graphql.ts"
+import type { Bookmark } from "../schema.ts"
 
-export const firstStillUrl = (bookmark: Bookmark): string | undefined => {
-  const first = bookmark.media[0]
-  if (first === undefined) return undefined
-  if (first.type === "photo") return first.url
-  return first.poster
+export const stillUrls = (bookmark: Bookmark): ReadonlyArray<string> => {
+  const urls: Array<string> = []
+  for (const item of bookmark.media) {
+    if (item.type === "photo") {
+      urls.push(item.url)
+      continue
+    }
+    if (item.poster !== undefined) urls.push(item.poster)
+  }
+  return urls
 }
 
 export const stillExtension = (url: string): string => {

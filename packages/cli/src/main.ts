@@ -2,10 +2,12 @@
 
 import { fileURLToPath } from "node:url"
 import { NodeHttpClient, NodeRuntime, NodeServices } from "@effect/platform-node"
-import { Console, Effect, Layer, Option } from "effect"
+import { Effect, Layer, Option } from "effect"
 import { Command, Flag } from "effect/unstable/cli"
 import { apiCommand } from "./api-commands.ts"
 import { ensureServer, serverStatus, stopServer } from "./ensure.ts"
+import { printReady } from "./ready.ts"
+import { clearRegistrationIfOwner, writeRegistration } from "./registration.ts"
 import packageJson from "../package.json" with { type: "json" }
 
 const cliScript = fileURLToPath(import.meta.url)
@@ -24,14 +26,24 @@ const serviceServe = Command.make(
   "serve",
   serveFlags,
   Effect.fn("serviceServe")(function* ({ cacheDir, dataDir, host, llamaPort, port }) {
-    const { runServer } = yield* Effect.promise(() => import("@xkeep/server/run-server"))
-    return yield* runServer({
-      host: Option.getOrUndefined(host),
-      port: Option.getOrUndefined(port),
-      dataDir: Option.getOrUndefined(dataDir),
-      cacheDir: Option.getOrUndefined(cacheDir),
-      llamaPort: Option.getOrUndefined(llamaPort),
-    })
+    const { AppConfig, layer } = yield* Effect.promise(() => import("@xkeep/server"))
+    return yield* Effect.gen(function* () {
+      const config = yield* AppConfig
+      const info = yield* writeRegistration({ host: config.host, port: config.port })
+      yield* printReady(info.url)
+      return yield* Effect.never
+    }).pipe(
+      Effect.ensuring(clearRegistrationIfOwner()),
+      Effect.provide(
+        layer({
+          host: Option.getOrUndefined(host),
+          port: Option.getOrUndefined(port),
+          dataDir: Option.getOrUndefined(dataDir),
+          cacheDir: Option.getOrUndefined(cacheDir),
+          llamaPort: Option.getOrUndefined(llamaPort),
+        }),
+      ),
+    )
   }),
 ).pipe(Command.withDescription("Run the HTTP server in the foreground."))
 
@@ -40,7 +52,7 @@ const serviceStart = Command.make(
   { url: urlFlag() },
   Effect.fn("serviceStart")(function* ({ url }) {
     const baseUrl = yield* ensureServer({ url, cliScript })
-    yield* Console.log(baseUrl)
+    yield* printReady(baseUrl)
   }),
 ).pipe(Command.withDescription("Ensure the detached server is running."))
 
@@ -58,7 +70,7 @@ const serviceRestart = Command.make(
   Effect.fn("serviceRestart")(function* ({ url }) {
     yield* stopServer()
     const baseUrl = yield* ensureServer({ url, cliScript })
-    yield* Console.log(baseUrl)
+    yield* printReady(baseUrl)
   }),
 ).pipe(Command.withDescription("Stop the registered server, then start a new one."))
 
@@ -80,12 +92,12 @@ const command = Command.make(
   { url: urlFlag() },
   Effect.fn("bareCommand")(function* ({ url }) {
     const baseUrl = yield* ensureServer({ url, cliScript })
-    yield* Console.log(baseUrl)
+    yield* printReady(baseUrl)
   }),
 ).pipe(
   Command.withShortDescription("Local X bookmarks app"),
   Command.withDescription(
-    "Bare invocation ensures the daemon and prints its url. service manages the process. api is curl against the running server.",
+    "Bare invocation ensures the daemon and prints how to open it. service manages the process. api is curl against the running server.",
   ),
   Command.withSubcommands([serviceCommand, apiCommand]),
 )

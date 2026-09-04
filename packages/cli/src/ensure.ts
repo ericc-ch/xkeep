@@ -1,13 +1,11 @@
 import { spawn } from "node:child_process"
 import { Socket } from "node:net"
 import { Console, Data, Effect, FileSystem, Option, Schedule, Schema } from "effect"
-import {
-  Health,
-  HTTP_HOST_DEFAULT,
-  HTTP_PORT_DEFAULT,
-  readRegistration,
-  serviceRegistrationPath,
-} from "@xkeep/server/api"
+import { HEALTH_PATH, Health } from "@xkeep/server/schema"
+import { readRegistration, serviceRegistrationPath } from "./registration.ts"
+
+const HTTP_HOST_DEFAULT = "127.0.0.1"
+const HTTP_PORT_DEFAULT = 8787
 
 export class CliError extends Data.TaggedError("CliError")<{
   readonly reason: string
@@ -30,7 +28,7 @@ const probeHealth = Effect.fn("probeHealth")(function* (url: string) {
   const base = url.replace(/\/$/, "")
   const result = yield* Effect.tryPromise({
     try: async () => {
-      const response = await fetch(`${base}/health`, {
+      const response = await fetch(`${base}${HEALTH_PATH}`, {
         signal: AbortSignal.timeout(healthTimeoutMs),
       })
       if (!response.ok) return undefined

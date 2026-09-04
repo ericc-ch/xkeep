@@ -56,12 +56,17 @@ export class LlamaEmbedError extends Data.TaggedError("LlamaEmbedError")<{
   readonly reason: string
 }> {}
 
+export type EmbedItem = {
+  readonly text: string
+  readonly stillPaths: ReadonlyArray<string>
+}
+
 export class Llama extends Context.Service<
   Llama,
   {
     readonly state: () => Effect.Effect<LlamaState>
     readonly embed: (
-      items: ReadonlyArray<{ readonly text: string; readonly stillPath: string | undefined }>,
+      items: ReadonlyArray<EmbedItem>,
       kind: EmbedKind,
     ) => Effect.Effect<
       ReadonlyArray<Float32Array>,
@@ -343,19 +348,23 @@ const EmbedRow = Schema.Struct({
 
 const embedBatch = Effect.fn("embedBatch")(function* (
   config: Config,
-  items: ReadonlyArray<{ readonly text: string; readonly stillPath: string | undefined }>,
+  items: ReadonlyArray<EmbedItem>,
   kind: EmbedKind,
 ) {
   const fs = yield* FileSystem.FileSystem
   const content: Array<Record<string, unknown>> = []
   for (const item of items) {
-    if (item.stillPath !== undefined && (yield* fs.exists(item.stillPath))) {
-      const bytes = yield* fs.readFile(item.stillPath)
-      const b64 = Buffer.from(bytes).toString("base64")
-      const user = `<|vision_start|>${MEDIA_MARKER}<|vision_end|>${item.text}`
+    const images: Array<string> = []
+    for (const stillPath of item.stillPaths) {
+      if (!(yield* fs.exists(stillPath))) continue
+      const bytes = yield* fs.readFile(stillPath)
+      images.push(Buffer.from(bytes).toString("base64"))
+    }
+    if (images.length > 0) {
+      const markers = images.map(() => `<|vision_start|>${MEDIA_MARKER}<|vision_end|>`).join("")
       content.push({
-        prompt_string: wrap(DOC_SYSTEM, user),
-        multimodal_data: [b64],
+        prompt_string: wrap(DOC_SYSTEM, `${markers}${item.text}`),
+        multimodal_data: images,
       })
     } else {
       content.push({
@@ -493,7 +502,7 @@ export const layer = Layer.effect(
         return yield* Ref.get(state)
       }),
       embed: Effect.fn("llama.embed")(function* (
-        items: ReadonlyArray<{ readonly text: string; readonly stillPath: string | undefined }>,
+        items: ReadonlyArray<EmbedItem>,
         kind: EmbedKind,
       ) {
         const current = yield* Ref.get(state)
