@@ -3,7 +3,7 @@ x-bookmarks is a local X bookmarks library. Nub + Effect. Product shape is in `d
 ## Architecture (directional)
 
 - **Server** — `packages/server`: Effect HTTP on localhost. sqlite via Drizzle + `@effect/sql-sqlite-node`, embed worker, `HttpApi`. v1 intake is a json file. No paid X API. No chrome extension in v1.
-- **CLI** — `packages/cli`: HTTP client only (`import`, `search`). Imports `@x-bookmarks/server/api`.
+- **CLI** — `packages/cli`: user-facing `x-bookmarks` bin. `service *` manages the daemon. `api` is generated from `HttpApi`. `service serve` loads `@x-bookmarks/server/run-server`.
 - **References sync** — `scripts/references.ts`: shallow-clones upstream sources into `/tmp/references/`.
 
 Use Nub as package manager (`nub install`).
@@ -18,7 +18,7 @@ For TypeScript style, follow the code-conventions skill.
 ## Workspace
 
 - `packages/server` — HTTP library process (`drizzle/` migrations, `db:generate`)
-- `packages/cli` — HTTP client
+- `packages/cli` — user-facing bin (`service`, `api`)
 - `scripts/` — install-time tooling (`references.ts`)
 - `docs/PLAN.md` — product shape
 

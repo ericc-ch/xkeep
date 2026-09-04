@@ -1,63 +1,93 @@
 #!/usr/bin/env nub
 
+import { fileURLToPath } from "node:url"
 import { NodeHttpClient, NodeRuntime, NodeServices } from "@effect/platform-node"
-import { Api, BookmarkDump, HTTP_HOST_DEFAULT, HTTP_PORT_DEFAULT } from "@x-bookmarks/server/api"
-import { Console, Data, Effect, FileSystem, Layer, Schema } from "effect"
+import { Console, Effect, Layer, Option } from "effect"
 import { Command, Flag } from "effect/unstable/cli"
-import { HttpApiClient } from "effect/unstable/httpapi"
+import { apiCommand } from "./api-commands.ts"
+import { ensureServer, serverStatus, stopServer } from "./ensure.ts"
 import packageJson from "../package.json" with { type: "json" }
 
-class CliError extends Data.TaggedError("CliError")<{
-  readonly reason: string
-}> {}
+const cliScript = fileURLToPath(import.meta.url)
 
-const defaultUrl = `http://${HTTP_HOST_DEFAULT}:${HTTP_PORT_DEFAULT}`
+const urlFlag = () => Flag.string("url").pipe(Flag.optional, Flag.withMetavar("URL"))
 
-const importCommand = Command.make(
-  "import",
-  {
-    file: Flag.file("file", { mustExist: true }).pipe(Flag.withMetavar("FILE")),
-    url: Flag.string("url").pipe(Flag.withDefault(defaultUrl), Flag.withMetavar("URL")),
-  },
-  Effect.fn("importCommand")(function* ({ file, url }) {
-    const fs = yield* FileSystem.FileSystem
-    const raw = yield* fs.readFileString(file)
-    const json = yield* Effect.try({
-      try: (): unknown => JSON.parse(raw),
-      catch: () => new CliError({ reason: "dump is not json" }),
+const serveFlags = {
+  host: Flag.string("host").pipe(Flag.optional, Flag.withMetavar("HOST")),
+  port: Flag.integer("port").pipe(Flag.optional, Flag.withMetavar("PORT")),
+  dataDir: Flag.string("data-dir").pipe(Flag.optional, Flag.withMetavar("DIR")),
+  cacheDir: Flag.string("cache-dir").pipe(Flag.optional, Flag.withMetavar("DIR")),
+  llamaPort: Flag.integer("llama-port").pipe(Flag.optional, Flag.withMetavar("PORT")),
+}
+
+const serviceServe = Command.make(
+  "serve",
+  serveFlags,
+  Effect.fn("serviceServe")(function* ({ cacheDir, dataDir, host, llamaPort, port }) {
+    const { runServer } = yield* Effect.promise(() => import("@x-bookmarks/server/run-server"))
+    return yield* runServer({
+      host: Option.getOrUndefined(host),
+      port: Option.getOrUndefined(port),
+      dataDir: Option.getOrUndefined(dataDir),
+      cacheDir: Option.getOrUndefined(cacheDir),
+      llamaPort: Option.getOrUndefined(llamaPort),
     })
-    const dump = yield* Schema.decodeUnknownEffect(BookmarkDump)(json).pipe(
-      Effect.mapError(() => new CliError({ reason: "dump failed schema checks" })),
-    )
-    const client = yield* HttpApiClient.make(Api, { baseUrl: url.replace(/\/$/, "") })
-    const result = yield* client.importDump({ payload: dump })
-    yield* Console.log(JSON.stringify(result))
   }),
-).pipe(Command.withDescription("Import a bookmarks dump JSON file through the running server."))
+).pipe(Command.withDescription("Run the HTTP server in the foreground."))
 
-const searchCommand = Command.make(
-  "search",
-  {
-    q: Flag.string("q").pipe(Flag.withMetavar("QUERY")),
-    url: Flag.string("url").pipe(Flag.withDefault(defaultUrl), Flag.withMetavar("URL")),
-  },
-  Effect.fn("searchCommand")(function* ({ q, url }) {
-    const client = yield* HttpApiClient.make(Api, { baseUrl: url.replace(/\/$/, "") })
-    const result = yield* client.search({ query: { q } })
-    for (const hit of result.hits) {
-      yield* Console.log(
-        `${hit.score.toFixed(3)} @${hit.handle} ${hit.text.replaceAll("\n", " ").slice(0, 100)}`,
-      )
-    }
+const serviceStart = Command.make(
+  "start",
+  { url: urlFlag() },
+  Effect.fn("serviceStart")(function* ({ url }) {
+    const baseUrl = yield* ensureServer({ url, cliScript })
+    yield* Console.log(baseUrl)
   }),
-).pipe(Command.withDescription("Semantic search against the running server."))
+).pipe(Command.withDescription("Ensure the detached server is running."))
 
-const command = Command.make("x-bookmarks-cli").pipe(
-  Command.withShortDescription("HTTP client for the local X bookmarks library"),
+const serviceStop = Command.make(
+  "stop",
+  {},
+  Effect.fn("serviceStop")(function* () {
+    yield* stopServer()
+  }),
+).pipe(Command.withDescription("Stop the registered server."))
+
+const serviceRestart = Command.make(
+  "restart",
+  { url: urlFlag() },
+  Effect.fn("serviceRestart")(function* ({ url }) {
+    yield* stopServer()
+    const baseUrl = yield* ensureServer({ url, cliScript })
+    yield* Console.log(baseUrl)
+  }),
+).pipe(Command.withDescription("Stop the registered server, then start a new one."))
+
+const serviceStatus = Command.make(
+  "status",
+  {},
+  Effect.fn("serviceStatus")(function* () {
+    yield* serverStatus()
+  }),
+).pipe(Command.withDescription("Print registration and health."))
+
+const serviceCommand = Command.make("service").pipe(
+  Command.withDescription("Manage the detached x-bookmarks server."),
+  Command.withSubcommands([serviceStart, serviceStop, serviceRestart, serviceStatus, serviceServe]),
+)
+
+const command = Command.make(
+  "x-bookmarks",
+  { url: urlFlag() },
+  Effect.fn("bareCommand")(function* ({ url }) {
+    const baseUrl = yield* ensureServer({ url, cliScript })
+    yield* Console.log(baseUrl)
+  }),
+).pipe(
+  Command.withShortDescription("Local X bookmarks app"),
   Command.withDescription(
-    "Talk to a running x-bookmarks server. import and search are HTTP clients.",
+    "Bare invocation ensures the daemon and prints its url. service manages the process. api calls HTTP.",
   ),
-  Command.withSubcommands([importCommand, searchCommand]),
+  Command.withSubcommands([serviceCommand, apiCommand]),
 )
 
 NodeRuntime.runMain(
