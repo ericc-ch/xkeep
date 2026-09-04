@@ -1,7 +1,7 @@
 import envPaths from "env-paths"
 import { Context, Data, Effect, FileSystem, Layer, Predicate, Schema, SchemaIssue } from "effect"
 
-const APP_NAME = "x-bookmarks"
+const APP_NAME = "xkeep"
 
 export const LLAMA_BUILD = "b10752"
 export const LLAMA_PORT_DEFAULT = 8913

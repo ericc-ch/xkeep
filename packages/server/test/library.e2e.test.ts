@@ -14,9 +14,9 @@ import { apiLayer } from "../src/http/server.ts"
 import { layer as libraryLayer } from "../src/library/library.ts"
 import dumpJson from "./fixtures/dump.json" with { type: "json" }
 
-const dataDir = "/tmp/x-bookmarks-e2e"
+const dataDir = "/tmp/xkeep-e2e"
 const canaryId = "1890000000000000123"
-const canaryText = "x-bookmarks e2e canary quartz-vector-7"
+const canaryText = "xkeep e2e canary quartz-vector-7"
 
 const dump = Schema.decodeUnknownSync(BookmarkDump)(dumpJson)
 

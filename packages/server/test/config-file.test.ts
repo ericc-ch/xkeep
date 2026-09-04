@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest"
 import { Effect, Layer } from "effect"
 import { AppConfig, type AppConfigOverrides } from "../src/config.ts"
 
-const paths = envPaths("x-bookmarks", { suffix: "" })
+const paths = envPaths("xkeep", { suffix: "" })
 
 const writeConfig = (dir: string, content: unknown) => {
   const configPath = join(dir, "config.json")
@@ -33,7 +33,7 @@ const failureReason = async (overrides: AppConfigOverrides) => {
 }
 
 const withDir = async (body: (dir: string) => Promise<void>) => {
-  const dir = mkdtempSync(join(tmpdir(), "x-bookmarks-config-"))
+  const dir = mkdtempSync(join(tmpdir(), "xkeep-config-"))
   try {
     await body(dir)
   } finally {

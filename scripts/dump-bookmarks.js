@@ -1,5 +1,5 @@
 ;(() => {
-  const DUMP_SCHEMA = "x-bookmarks-dump/1"
+  const DUMP_SCHEMA = "xkeep-dump/1"
 
   const boot = () => {
     if (!location.hostname.includes("x.com") && !location.hostname.includes("twitter.com")) {
@@ -261,7 +261,7 @@
       const url = URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = url
-      a.download = "x-bookmarks-dump.json"
+      a.download = "xkeep-dump.json"
       a.click()
       setTimeout(() => URL.revokeObjectURL(url), 2000)
       status.textContent = `Downloaded ${bookmarks.length} bookmarks`

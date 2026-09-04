@@ -7,7 +7,7 @@ import { runServer } from "./run-server.ts"
 import packageJson from "../package.json" with { type: "json" }
 
 const command = Command.make(
-  "x-bookmarks",
+  "xkeep",
   {
     host: Flag.string("host").pipe(Flag.optional, Flag.withMetavar("HOST")),
     port: Flag.integer("port").pipe(Flag.optional, Flag.withMetavar("PORT")),

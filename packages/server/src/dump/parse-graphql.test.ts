@@ -178,7 +178,7 @@ describe("BookmarkDump", () => {
   it("accepts a v1 dump object", () => {
     const bookmarks = parseBookmarksFromGraphql([graphqlPage])
     const parsed = Schema.decodeUnknownExit(BookmarkDump)({
-      schema: "x-bookmarks-dump/1",
+      schema: "xkeep-dump/1",
       source: "bookmark",
       captured_at: "2026-09-01T00:00:00.000Z",
       bookmarks,
@@ -199,7 +199,7 @@ describe("BookmarkDump", () => {
     expect(
       Exit.isFailure(
         Schema.decodeUnknownExit(BookmarkDump)({
-          schema: "x-bookmarks-dump/1",
+          schema: "xkeep-dump/1",
           source: "bookmark",
           captured_at: "../../passwd",
           bookmarks: [],
@@ -210,7 +210,7 @@ describe("BookmarkDump", () => {
     expect(
       Exit.isFailure(
         Schema.decodeUnknownExit(BookmarkDump)({
-          schema: "x-bookmarks-dump/1",
+          schema: "xkeep-dump/1",
           source: "bookmark",
           captured_at: "2026-09-01T00:00:00.000Z",
           bookmarks: [

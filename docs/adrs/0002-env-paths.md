@@ -10,7 +10,7 @@ Media + sqlite + GGUF are large. Defaults should follow XDG via `env-paths`, but
 
 ## Decision
 
-Use `env-paths` with name `x-bookmarks` and `suffix: ""`.
+Use `env-paths` with name `xkeep` and `suffix: ""`.
 
 - data: sqlite, `media/`, `imports/`
 - cache: Vulkan `llama-server` binary, GGUF + mmproj

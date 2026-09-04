@@ -1,5 +1,5 @@
 {
-  "name": "@x-bookmarks/server",
+  "name": "@xkeep/server",
   "version": "0.0.0",
   "private": true,
   "type": "module",

@@ -1,8 +1,8 @@
-# x bookmarks library
+# xkeep
 
 personal, local, foss. no paid x developer api.
 
-cooked 2026-09-01. name still open. this is the shape, not an implementation spec.
+cooked 2026-09-01. name is xkeep. this is the shape, not an implementation spec.
 
 the whole product is an `npx` server. ui, sqlite, embeddings, canvas, tags. intake is a json file. no chrome extension in v1.
 
@@ -55,7 +55,7 @@ two verbs. only one of them is software you run every day.
 
 **save** — you are already logged into x. paste a console snippet (or click a bookmarklet) on `x.com/i/bookmarks`. it scrolls, dumps an importable json, downloads it. this is a solved genre. do not invent an extension for it.
 
-**think** — `npx <name>`. first run pulls the model, boots the server, opens the library. drop the json. semantic search, filters, tags, canvas.
+**think** — `npx xkeep`. first run pulls the model, boots the server, opens the library. drop the json. semantic search, filters, tags, canvas.
 
 re-drop later = sync. dedupe on tweet id. that is "future bookmarking" for a human who bookmarks in bursts. not a watcher on every star.
 
@@ -63,7 +63,7 @@ add a userscript or thin extension only when the re-export ritual starts to suck
 
 ### onboarding (this is the product)
 
-1. `npx <name>` — library opens. empty state explains the dump.
+1. `npx xkeep` — library opens. empty state explains the dump.
 2. go to bookmarks, paste / bookmarklet, get json.
 3. drop the file. embedding starts in the background.
 4. search works first. canvas is one click away on the same vectors.
@@ -89,7 +89,7 @@ in:
 - bookmarks only (not likes, not lists)
 - shadow-copy: x still has them. we never unbookmark
 - file intake (bookmarklet + console snippet + drag-drop). incremental import, dedupe on tweet id
-- sqlite + media dir on disk, default `~/.local/share/<name>/`
+- sqlite + media dir on disk, default `~/.local/share/xkeep/`
 - embed: `Qwen/Qwen3-VL-Embedding-2B` via official vulkan `llama-server` (b10752). fused text+first-still vector, 2048-d stored
 - search is the front door (semantic + keyword)
 - filters: author, media type (text / image / video / article / link), date, tags
@@ -115,7 +115,7 @@ out of v1:
 x.com/i/bookmarks  --(bookmarklet/console)-->  bookmarks.json
                                                   |
                                                   v
-npx <name>  =  http server on localhost
+npx xkeep  =  http server on localhost
                ├── spa (search, filters, tags, canvas)
                ├── sqlite (tweets, users, tags, vectors)
                ├── media/ (optional local copies, urls always stored)
@@ -131,7 +131,7 @@ gl503ge is the brain. this is where embeddings run.
 source of truth is files:
 
 ```
-~/.local/share/<name>/
+~/.local/share/xkeep/
   library.sqlite
   media/
   models/          # unused; GGUF lives in the cache dir
@@ -179,7 +179,7 @@ we are reading the user's own logged-in bookmarks, for the user, locally. not a 
 ## later (only when v1 sucks in a specific way)
 
 - userscript or thin extension: live capture so you stop re-pasting. still not the product. queue in the extension, drain into sqlite.
-- `npx <name> sync` that drives helium/chrome with the existing session (xmarks shape) if console paste is too fiddly
+- `npx xkeep sync` that drives helium/chrome with the existing session (xmarks shape) if console paste is too fiddly
 - tailnet bind so the library is reachable from the phone / another box
 - llm pass for tag names if cluster labels are garbage
 - likes, as a separate pile, same embed pipeline
@@ -190,7 +190,7 @@ we are reading the user's own logged-in bookmarks, for the user, locally. not a 
 
 ## name
 
-open. needs to read as the job. not a chrome-store adjective pile. not a random -boo (that's for agents).
+xkeep. `npx xkeep`. not a chrome-store adjective pile. not a random -boo (that's for agents).
 
 working folder on gl503ge: `~/projects/x-bookmarks/`
 

@@ -1,5 +1,5 @@
 {
-  "name": "x-bookmarks",
+  "name": "xkeep",
   "version": "0.0.0",
   "private": true,
   "workspaces": [
@@ -11,7 +11,7 @@
     "format": "oxfmt",
     "lint": "oxlint --fix",
     "prepare": "effect-language-service patch && nub scripts/references.ts",
-    "start": "nub run --filter @x-bookmarks/server start",
+    "start": "nub run --filter @xkeep/server start",
     "test": "vitest run",
     "typecheck": "tsc -b"
   },

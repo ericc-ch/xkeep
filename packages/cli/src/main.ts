@@ -24,7 +24,7 @@ const serviceServe = Command.make(
   "serve",
   serveFlags,
   Effect.fn("serviceServe")(function* ({ cacheDir, dataDir, host, llamaPort, port }) {
-    const { runServer } = yield* Effect.promise(() => import("@x-bookmarks/server/run-server"))
+    const { runServer } = yield* Effect.promise(() => import("@xkeep/server/run-server"))
     return yield* runServer({
       host: Option.getOrUndefined(host),
       port: Option.getOrUndefined(port),
@@ -71,12 +71,12 @@ const serviceStatus = Command.make(
 ).pipe(Command.withDescription("Print registration and health."))
 
 const serviceCommand = Command.make("service").pipe(
-  Command.withDescription("Manage the detached x-bookmarks server."),
+  Command.withDescription("Manage the detached xkeep server."),
   Command.withSubcommands([serviceStart, serviceStop, serviceRestart, serviceStatus, serviceServe]),
 )
 
 const command = Command.make(
-  "x-bookmarks",
+  "xkeep",
   { url: urlFlag() },
   Effect.fn("bareCommand")(function* ({ url }) {
     const baseUrl = yield* ensureServer({ url, cliScript })

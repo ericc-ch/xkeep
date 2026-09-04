@@ -1,9 +1,9 @@
-x-bookmarks is a local X bookmarks library. Nub + Effect. Product shape is in `docs/PLAN.md`.
+xkeep is a local X bookmarks library. Nub + Effect. Product shape is in `docs/PLAN.md`.
 
 ## Architecture (directional)
 
 - **Server** — `packages/server`: Effect HTTP on localhost. sqlite via Drizzle + `@effect/sql-sqlite-node`, embed worker, `HttpApi`. v1 intake is a json file. No paid X API. No chrome extension in v1.
-- **CLI** — `packages/cli`: user-facing `x-bookmarks` bin. `service *` manages the daemon. `api` is generated from `HttpApi`. `service serve` loads `@x-bookmarks/server/run-server`.
+- **CLI** — `packages/cli`: user-facing `xkeep` bin. `service *` manages the daemon. `api` is generated from `HttpApi`. `service serve` loads `@xkeep/server/run-server`.
 - **References sync** — `scripts/references.ts`: shallow-clones upstream sources into `/tmp/references/`.
 
 Use Nub as package manager (`nub install`).

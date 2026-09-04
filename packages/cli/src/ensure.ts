@@ -7,7 +7,7 @@ import {
   HTTP_PORT_DEFAULT,
   readRegistration,
   serviceRegistrationPath,
-} from "@x-bookmarks/server/api"
+} from "@xkeep/server/api"
 
 export class CliError extends Data.TaggedError("CliError")<{
   readonly reason: string
@@ -105,7 +105,7 @@ export const discoverServer = Effect.fn("discoverServer")(function* (url: Option
   const registered = yield* registeredHealthy()
   if (registered !== undefined) return registered.url
   if (yield* isHttpUp(defaultUrl)) return defaultUrl
-  return yield* new CliError({ reason: "server is not running; run x-bookmarks service start" })
+  return yield* new CliError({ reason: "server is not running; run xkeep service start" })
 })
 
 export const ensureServer = Effect.fn("ensureServer")(function* (input: {
@@ -130,7 +130,7 @@ export const ensureServer = Effect.fn("ensureServer")(function* (input: {
       return yield* new CliError({
         reason:
           fail.includes("EADDRINUSE") || fail.toLowerCase().includes("address already in use")
-            ? `port is already in use by another process (not x-bookmarks). ${fail}`
+            ? `port is already in use by another process (not xkeep). ${fail}`
             : fail,
       })
     }

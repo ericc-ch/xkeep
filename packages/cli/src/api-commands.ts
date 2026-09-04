@@ -1,4 +1,4 @@
-import { Api } from "@x-bookmarks/server/api"
+import { Api } from "@xkeep/server/api"
 import { Console, Effect, FileSystem, Option, Predicate, Schema } from "effect"
 import { Command, Flag } from "effect/unstable/cli"
 import { HttpApi, type HttpApiEndpoint, type HttpApiGroup } from "effect/unstable/httpapi"

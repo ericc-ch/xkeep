@@ -48,8 +48,8 @@ export const SearchResult = Schema.Struct({
   hits: Schema.Array(SearchHit),
 })
 
-export const Api = HttpApi.make("x-bookmarks")
-  .annotate(OpenApi.Title, "x-bookmarks")
+export const Api = HttpApi.make("xkeep")
+  .annotate(OpenApi.Title, "xkeep")
   .annotate(OpenApi.Description, "Local X bookmarks library")
   .add(
     HttpApiGroup.make("library", { topLevel: true })

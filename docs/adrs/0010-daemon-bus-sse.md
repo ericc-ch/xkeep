@@ -12,14 +12,14 @@ The product is a localhost HTTP app (`packages/server`) with an HTTP-only CLI (`
 - CLI
 - web interface
 - an edit in one place updates the other in realtime
-- `npx x-bookmarks` (and CLI verbs) should not require a separately started server for every call; the web UI should stay up after the CLI exits
+- `npx xkeep` (and CLI verbs) should not require a separately started server for every call; the web UI should stay up after the CLI exits
 
 Inspiration: anomalyco/opencode (v2). Two layers there are easy to conflate:
 
 1. **Session persistence** — append-only durable events + projectors into sqlite (`EventTable` / `EventSequenceTable`). That is event sourcing for chat/session aggregates.
 2. **Cross-client live updates** — in-process pub/sub bus after mutations, browser listens on SSE (`GET /event`). Live stream has no Last-Event-ID; reconnect means REST snapshot then resubscribe.
 
-x-bookmarks is not a chat transcript. Cluster renames, tags, imports, and embed progress do not need replayable aggregates or rebuilding the DB from a log. Full event sourcing (every mutation is an event, tables are projections) is rejected for v1: one user, one sqlite file, derived embed work would fight an append log, and OpenAPI stays request/response for mutations. Domain nouns: ADR 0011.
+xkeep is not a chat transcript. Cluster renames, tags, imports, and embed progress do not need replayable aggregates or rebuilding the DB from a log. Full event sourcing (every mutation is an event, tables are projections) is rejected for v1: one user, one sqlite file, derived embed work would fight an append log, and OpenAPI stays request/response for mutations. Domain nouns: ADR 0011.
 
 ADR 0008 parked "server-written discovery" for the CLI URL. That is revisited here: the managed daemon _is_ that discovery, via health + a state-dir registration file, not by deriving URL from the server config file.
 
@@ -45,7 +45,7 @@ cli / web  --HTTP mutation-->  server writes sqlite
 
 - Keep Effect `HttpApi` as the contract. Reads and mutations stay REST (GET/POST/PUT/PATCH) and appear in OpenAPI.
 - Add one streaming endpoint, `GET /events` (SSE). Document it as SSE in the spec; do not invent a second RPC surface.
-- CLI and web both use `@x-bookmarks/server/api` (or the generated client). No sqlite imports in clients (ADR 0005).
+- CLI and web both use `@xkeep/server/api` (or the generated client). No sqlite imports in clients (ADR 0005).
 
 ### In-process bus (not event sourcing)
 
@@ -70,15 +70,15 @@ So "edit in one place updates the other" means: both clients hit the same server
 
 Copy opencode's _lifecycle idea_, not its multi-contender election (many clients racing `serve --service` over one port).
 
-**One user-facing bin:** `x-bookmarks`. Top level is `service` (process) and `api` (HttpApi). Package split may remain internal.
+**One user-facing bin:** `xkeep`. Top level is `service` (process) and `api` (HttpApi). Package split may remain internal.
 
 **Auth:** trust loopback. No password in `service.json` (pid/host/port/url/startedAt only). Revisit if bind leaves `127.0.0.1`.
 
-**Bare `x-bookmarks` (no subcommand):** ensure daemon, print the url. Do **not** open a browser until a real UI package exists (do not train landing on `/docs`).
+**Bare `xkeep` (no subcommand):** ensure daemon, print the url. Do **not** open a browser until a real UI package exists (do not train landing on `/docs`).
 
-**Ensure URL** (bare + `service start` / `restart`): `--url` if set → probe that URL only (do not spawn). Else a `service.json` whose pid is alive and `GET /health` is HTTP 200 with `status: ok`. Else default `http://127.0.0.1:8787`. Else spawn detached `x-bookmarks service serve`. Do not wait for `llama: ready`.
+**Ensure URL** (bare + `service start` / `restart`): `--url` if set → probe that URL only (do not spawn). Else a `service.json` whose pid is alive and `GET /health` is HTTP 200 with `status: ok`. Else default `http://127.0.0.1:8787`. Else spawn detached `xkeep service serve`. Do not wait for `llama: ready`.
 
-**`api` URL** (no spawn): same probe order, then fail with “run `x-bookmarks service start`” if nothing is up.
+**`api` URL** (no spawn): same probe order, then fail with “run `xkeep service start`” if nothing is up.
 
 Foreground `service serve` writes the same `service.json`. `service stop` may stop a debug serve.
 
@@ -86,26 +86,26 @@ On `service start` / bare / restart spawn:
 
 1. Probe as in **Ensure URL** above.
 2. If healthy → use it.
-3. If not (and `--url` was not set) → spawn **detached** `x-bookmarks service serve`, **unref** the child, poll until `service.json` + `/health` are ready (or fail with a stderr tail).
+3. If not (and `--url` was not set) → spawn **detached** `xkeep service serve`, **unref** the child, poll until `service.json` + `/health` are ready (or fail with a stderr tail).
 4. If bind fails because something else already took the port, re-probe health and attach; do not run a voting/election protocol. If the occupant is not our health payload, fail with a clear message; do not kill strangers.
 
 ### CLI surface
 
 | Command                       | Role                                                                                                                                                                                                                                                                     |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `x-bookmarks`                 | Ensure daemon, print url                                                                                                                                                                                                                                                 |
-| `x-bookmarks service serve`   | Foreground server (debug)                                                                                                                                                                                                                                                |
-| `x-bookmarks service start`   | Ensure daemon running                                                                                                                                                                                                                                                    |
-| `x-bookmarks service stop`    | Stop the registered daemon                                                                                                                                                                                                                                               |
-| `x-bookmarks service restart` | Stop then start; must not silently reuse an unresponsive incumbent                                                                                                                                                                                                       |
-| `x-bookmarks service status`  | Registration + health                                                                                                                                                                                                                                                    |
-| `x-bookmarks api …`           | Generated 1:1 from `HttpApi` (`HttpApi.reflect`). Top-level endpoints are `api <id>`. Other groups are `api <group> <id>`. Query/path → flags; JSON body → `--file` (`-` = stdin). Stdout JSON. Skip SSE/stream endpoints. Adding an HttpApi endpoint is the CLI change. |
+| `xkeep`                 | Ensure daemon, print url                                                                                                                                                                                                                                                 |
+| `xkeep service serve`   | Foreground server (debug)                                                                                                                                                                                                                                                |
+| `xkeep service start`   | Ensure daemon running                                                                                                                                                                                                                                                    |
+| `xkeep service stop`    | Stop the registered daemon                                                                                                                                                                                                                                               |
+| `xkeep service restart` | Stop then start; must not silently reuse an unresponsive incumbent                                                                                                                                                                                                       |
+| `xkeep service status`  | Registration + health                                                                                                                                                                                                                                                    |
+| `xkeep api …`           | Generated 1:1 from `HttpApi` (`HttpApi.reflect`). Top-level endpoints are `api <id>`. Other groups are `api <group> <id>`. Query/path → flags; JSON body → `--file` (`-` = stdin). Stdout JSON. Skip SSE/stream endpoints. Adding an HttpApi endpoint is the CLI change. |
 
 Exiting the CLI or closing the browser does not stop the daemon. Only `service stop`, an explicit kill, or reboot does (user-level systemd/launchd for reboot persistence is optional later, not v1).
 
 Stale `service.json` (dead pid): treat as missing and start fresh. Port still held by a foreign process: fail with a clear message, do not kill strangers.
 
-This revises ADR 0008's "CLI reads no discovery file": the CLI may read `service.json` / health for ensure, but still does not read `~/.config/x-bookmarks/config.json`. Server listen config remains server-owned.
+This revises ADR 0008's "CLI reads no discovery file": the CLI may read `service.json` / health for ensure, but still does not read `~/.config/xkeep/config.json`. Server listen config remains server-owned.
 
 ### Packages (directional)
 

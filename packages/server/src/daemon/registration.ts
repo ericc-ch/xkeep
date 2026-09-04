@@ -20,7 +20,7 @@ const decodeRegistration = Schema.decodeUnknownEffect(registrationJson)
 
 export const serviceRegistrationPath = (): string => {
   const state = process.env.XDG_STATE_HOME ?? join(homedir(), ".local", "state")
-  return join(state, "x-bookmarks", "service.json")
+  return join(state, "xkeep", "service.json")
 }
 
 export const serviceUrl = (host: string, port: number): string => {

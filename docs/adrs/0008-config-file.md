@@ -18,17 +18,17 @@ Rejected all three: the client config surface is one URL string, and `--url` fix
 
 ## Decision
 
-One JSON file at the env-paths config dir (`~/.config/x-bookmarks/config.json`), read by the server only. Never auto-created; missing file means all defaults. All keys optional:
+One JSON file at the env-paths config dir (`~/.config/xkeep/config.json`), read by the server only. Never auto-created; missing file means all defaults. All keys optional:
 
 ```json
 {
   "listen": { "host": "127.0.0.1", "port": 8787 },
-  "paths": { "data": "/mnt/hdd/x-bookmarks", "cache": "/mnt/hdd/x-cache" },
+  "paths": { "data": "/mnt/hdd/xkeep", "cache": "/mnt/hdd/x-cache" },
   "llama": { "port": 8913 }
 }
 ```
 
-Precedence: CLI flags > config file > env-paths defaults. No `X_BOOKMARKS_*` reads. `llamaPort` has `--llama-port` so every key has a flag. `AppConfigOverrides` has one internal escape hatch, `configPath` (tests and embedders point it at a fixture; there is no CLI flag for it). The file schema lives in the server package; it is not exported through `@x-bookmarks/server/api` because the CLI never reads the file.
+Precedence: CLI flags > config file > env-paths defaults. No `XKEEP_*` reads. `llamaPort` has `--llama-port` so every key has a flag. `AppConfigOverrides` has one internal escape hatch, `configPath` (tests and embedders point it at a fixture; there is no CLI flag for it). The file schema lives in the server package; it is not exported through `@xkeep/server/api` because the CLI never reads the file.
 
 The CLI reads no config from disk: `--url` > built-in default.
 
@@ -36,4 +36,4 @@ The CLI reads no config from disk: `--url` > built-in default.
 
 ## Consequences
 
-Moving the server's port persistently means `--url` per CLI call. A typo'd key fails the boot instead of silently using a default. Shell profiles exporting `X_BOOKMARKS_*` do nothing.
+Moving the server's port persistently means `--url` per CLI call. A typo'd key fails the boot instead of silently using a default. Shell profiles exporting `XKEEP_*` do nothing.

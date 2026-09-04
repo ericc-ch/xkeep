@@ -1,6 +1,6 @@
 import { Schema } from "effect"
 
-export const DUMP_SCHEMA = "x-bookmarks-dump/1" as const
+export const DUMP_SCHEMA = "xkeep-dump/1" as const
 
 export const TweetId = Schema.String.check(Schema.isPattern(/^[0-9]{6,32}$/))
 

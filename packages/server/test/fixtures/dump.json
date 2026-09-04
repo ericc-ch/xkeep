@@ -1,5 +1,5 @@
 {
-  "schema": "x-bookmarks-dump/1",
+  "schema": "xkeep-dump/1",
   "source": "bookmark",
   "captured_at": "2026-09-02T00:00:00.000Z",
   "bookmarks": [
@@ -9,7 +9,7 @@
       "handle": "ada",
       "avatar": "https://pbs.twimg.com/profile_images/1683325380441128960/yRsRRjGO_400x400.jpg",
       "timestamp": "2026-09-01T00:00:00.000Z",
-      "text": "x-bookmarks e2e canary quartz-vector-7",
+      "text": "xkeep e2e canary quartz-vector-7",
       "media": [
         {
           "type": "photo",
