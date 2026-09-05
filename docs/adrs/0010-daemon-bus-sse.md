@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-09-04); amended same day after grilling (bins, auth, events, bare command); amended 2026-09-04 (`service.json` is CLI-owned, ADR 0012); amended 2026-09-05 (fine bookmark ids, open browser when SPA exists — ADR 0014).
+Accepted (2026-09-04); amended same day after grilling (bins, auth, events, bare command); amended 2026-09-04 (`service.json` is CLI-owned, ADR 0012); amended 2026-09-05 (fine bookmark ids, open the origin — ADR 0014). Ship slices below are done.
 
 ## Context
 
@@ -60,9 +60,9 @@ cli / web  --HTTP mutation-->  server writes sqlite
 
 - `GET /api/events` subscribes to the bus and streams SSE (Effect `Sse.encode` or equivalent).
 - On connect: emit `server.connected`, then live events; optional heartbeat.
-- Web on boot: REST snapshot, then `EventSource("/api/events")`. On event: patch local state or refetch the affected resource. On reconnect: snapshot again, then resubscribe (no Last-Event-ID replay on the live stream).
+- Web on boot: REST snapshot, then `client.events()` (`StreamSse`). On event: invalidate or refetch. On reconnect: snapshot again, then resubscribe (no Last-Event-ID replay on the live stream). First-cut tab only reacts to `bookmark.upserted` / `bookmark.embedded`.
 - CLI does **not** subscribe. It is one-shot: mutate, print, exit.
-- WebSocket rejected: traffic is server → client; mutations already use HTTP; SSE stays on the existing HTTP stack and reconnects via `EventSource`.
+- WebSocket rejected: traffic is server → client; mutations already use HTTP; SSE stays on the existing HTTP stack.
 
 So "edit in one place updates the other" means: both clients hit the same server; the server bus fans out to SSE; the web updates. CLI → web works. Web → CLI does not matter (no long-running CLI UI).
 
@@ -74,7 +74,7 @@ Copy opencode's _lifecycle idea_, not its multi-contender election (many clients
 
 **Auth:** trust loopback. No password in `service.json` (pid/host/port/url/startedAt only). Revisit if bind leaves `127.0.0.1`.
 
-**Bare `xkeep` (no subcommand):** ensure daemon, print the ready banner (art, pid when registered, origin, `/api/`, `xkeep api` example). Do not print llama state: HTTP is up while setup is still forked, so it would almost always say starting. Open the origin once the library SPA exists. Until then do not open `/api/docs`.
+**Bare `xkeep` (no subcommand):** ensure daemon, print the ready banner (art, pid when registered, origin, `/api/`, `xkeep api` example). Do not print llama state: HTTP is up while setup is still forked, so it would almost always say starting. Open the origin (`xdg-open`). Do not open `/api/docs`.
 
 **Ensure URL** (bare + `service start` / `restart`): `--url` if set → probe that URL only (do not spawn). Else a `service.json` whose pid is alive and `GET /api/health` is HTTP 200 with `status: ok`. Else default `http://127.0.0.1:8787`. Else spawn detached `xkeep service serve`. Do not wait for `llama: ready`.
 
@@ -107,18 +107,11 @@ Stale `service.json` (dead pid): treat as missing and start fresh. Port still he
 
 This revises ADR 0008's "CLI reads no discovery file": the CLI may read `service.json` / health for ensure, but still does not read `~/.config/xkeep/config.json`. Server listen config remains server-owned.
 
-### Packages (directional)
+### Packages
 
-- Server gains: bus module, `GET /api/events`, tag tree + cluster query APIs (ADR 0011).
-- Single bin gains: `service *` (ensure/spawn only here and on bare); `api` as a curl-style OpenAPI client; `service.json` IO.
-- UI (when real, not throwaway experiments): REST snapshot + EventSource; same mutation endpoints. Out of the first ship slice.
-
-### Ship order
-
-1. Daemon ensure + `service *` + `api` from HttpApi (no bus/sse yet); bare command prints the ready banner.
-2. Bus + `GET /api/events` (prove with curl / EventSource).
-3. Tag tree + bookmark-tag APIs + ephemeral cluster query + pile/media GETs (ADR 0014).
-4. Real web UI at `/` (opens browser).
+- Server: bus, `GET /api/events`, tag tree, cluster query, pile/media (ADR 0011, 0014).
+- CLI: `service *`, `api`, `service.json`.
+- Web: REST snapshot + `client.events()`; same mutation endpoints. First cut is drop + map at `/`.
 
 ## Consequences
 

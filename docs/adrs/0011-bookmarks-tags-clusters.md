@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-09-04) — grilled with Erick. Amended 2026-09-05: UMAP (not PCA) for 2d; no auto-tag; canvas is the library view. See ADR 0014.
+Accepted (2026-09-04) — grilled with Erick. Amended 2026-09-05: UMAP (not PCA) for 2d; no auto-tag; canvas is the library view; no `minSize`; no coarse `bookmarks.changed`. See ADR 0014.
 
 ## Context
 
@@ -25,32 +25,32 @@ Hashtags from the X dump stay on the bookmark as imported metadata (`hashtags_js
 
 - **Cluster is not saved.** There is no `clusters` table and no `cluster_id` on bookmarks.
 - A **cluster query** is a read-only k-means over bookmarks that already have embeddings (2048-d) for `groupId`. `x`,`y` are not computed here: the drain writes UMAP (`umap-js`) onto a row once; later rows transform into the same space. Import cannot project (no vectors yet).
-- Query params that matter: `k`, maybe `minSize`. Not a free "dimensions" knob for the embedding space (fixed by the model). Projection to 2d is for display/orientation in the response.
-- Response: ephemeral group ids (valid only for this response), `size`, `memberIds`, centroid (and/or projected coords). Next call may return different groupings.
+- Query params that matter: `k` only (default 12). No `minSize`. Not a free "dimensions" knob for the embedding space (fixed by the model).
+- Response: `members` with `id`, cached `x`,`y`, ephemeral `groupId`, plus `skippedUnembedded`. Next call may return different groupings.
 - Bookmarks still embedding: **skip** them and return `skippedUnembedded: n`. Do not block on the drain; do not pretend they were clustered.
-- **Tagging from a cluster** is client-composed: CLI/UI takes `memberIds` from the query result and calls the normal tag-apply APIs. The server does not accept "cluster id" or keep a short-lived cluster cache.
+- **Tagging from a cluster** is client-composed: take `members[].id` and call the normal tag-apply APIs. The server does not accept "cluster id" or keep a short-lived cluster cache.
 
 No auto-tag. The client may still take `memberIds` and call tag APIs.
 
 ### Not domain objects
 
-- **Canvas** — not an entity. The library UI draws the last cluster query as a spatial map of thumbs. Still not a table.
-- **Stored projection** — not required as user data. If `proj_x`/`proj_y` exist later, they are cache, not source of truth.
+- **Canvas** — not an entity. The library UI places thumbs from cached UMAP `x`,`y` on the bookmark row. Still not a table. Cluster GET is not used to place marks.
+- **Stored projection** — `proj_x`/`proj_y` are cache written by the drain, not source of truth.
 
-### HTTP surface (directional)
+### HTTP surface
 
 - Tag tree CRUD on tag rows.
-- Bookmark tags: **both** full replace (`PUT …/tags`) and add/remove one (for CLI ergonomics).
-- Cluster: `GET` (or `POST` if the body is large) read-only query endpoint; no write routes named cluster.
+- Bookmark tags: **both** full replace (`PUT …/tags`) and add/remove one.
+- Cluster: `GET /api/clusters?k=` read-only; no write routes named cluster.
 - Import/search/health unchanged in role.
 
 ### Events (bus)
 
-See ADR 0010. With these nouns: fine events for tag tree + bookmark tag membership; coarse `bookmarks.changed` for import/embed/drain. Cluster queries do not publish (read-only, ephemeral).
+See ADR 0010 / 0014. Fine events for tag tree + bookmark tag membership; `bookmark.upserted` / `bookmark.embedded` with ids for import/embed. Cluster queries do not publish (read-only, ephemeral).
 
 ## Consequences
 
 - Throwaway canvas schema (`clusters`, `cluster_id`, treating cluster rename as the main write) is rejected for main.
-- CLI mental model: `cluster` (inspect) → `tag add … <ids>` (persist).
+- CLI mental model: `xkeep api cluster` (inspect) → tag-apply HTTP (persist).
 - Hierarchical tags cost real tree APIs (move/rename/delete rules) instead of path-string hacks.
-- UI can show a scatter from the last cluster response without persisting that scatter.
+- UI can show a scatter from cached UMAP without persisting cluster groups.

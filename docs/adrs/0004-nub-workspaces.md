@@ -17,4 +17,4 @@ The repo used Bun as package manager and `.ts` runner (`bun.lock`, `#!/usr/bin/e
 
 ## Consequences
 
-Agents and scripts call `nub`, not `bun`. Consumers later still match PLAN (`npx` / `nubx` the server bin). Workspace topology is the npm `workspaces` field, which Nub reads.
+Agents and scripts call `nub`, not `bun`. The user-facing bin is `xkeep` in `@xkeep/cli`. `npx xkeep` is the later install story in PLAN, not a server package bin. Workspace topology is the npm `workspaces` field, which Nub reads.
