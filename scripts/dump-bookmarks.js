@@ -1,5 +1,7 @@
 ;(() => {
-  const boot = () => {
+  const ORIGIN = "http://127.0.0.1:5337"
+
+  const boot = async () => {
     if (!location.hostname.includes("x.com") && !location.hostname.includes("twitter.com")) {
       alert("Paste this on x.com (History / Bookmarks).")
       return
@@ -170,6 +172,20 @@
 
     const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
+    let limit = Number.POSITIVE_INFINITY
+    for (;;) {
+      const raw = prompt("How many bookmarks to export? Leave empty to export all bookmarks.")
+      if (raw === null) return
+      const trimmed = raw.trim()
+      if (trimmed === "") break
+      const n = Number(trimmed)
+      if (Number.isInteger(n) && n > 0) {
+        limit = n
+        break
+      }
+      alert("Enter a whole number, or leave empty for all.")
+    }
+
     const panel = document.createElement("div")
     Object.assign(panel.style, {
       position: "fixed",
@@ -186,9 +202,12 @@
       boxShadow: "0 4px 16px rgba(0,0,0,.4)",
     })
     const status = document.createElement("div")
-    status.textContent = "Installing hook…"
+    const log = (line) => {
+      status.textContent = line
+    }
+    log("Looking for xkeep…")
     const stopBtn = document.createElement("button")
-    stopBtn.textContent = "Stop + download"
+    stopBtn.textContent = "Stop"
     Object.assign(stopBtn.style, {
       marginTop: "8px",
       padding: "6px 10px",
@@ -202,12 +221,45 @@
     panel.append(status, stopBtn)
     document.body.appendChild(panel)
 
+    const origFetch = window.fetch
+    const xkeepFetch = (path, init) =>
+      origFetch(`${ORIGIN}${path}`, { ...init, targetAddressSpace: "loopback" })
+
+    const known = new Set()
+    let importWhenDone = false
+    log(`Looking for xkeep at ${ORIGIN}`)
+    try {
+      const health = await xkeepFetch("/api/health")
+      if (health.ok) {
+        const body = await health.json()
+        if (body && body.status === "ok") {
+          const listed = await xkeepFetch("/api/bookmarks")
+          if (listed.ok) {
+            const pile = await listed.json()
+            const rows = Array.isArray(pile.bookmarks) ? pile.bookmarks : []
+            for (const row of rows) {
+              if (row && typeof row.id === "string") known.add(row.id)
+            }
+          }
+          log(`xkeep is up. ${known.size} already saved.`)
+          importWhenDone = confirm(
+            "xkeep is running. Import when done? OK sends bookmarks to the app. Cancel downloads a file.",
+          )
+        } else {
+          log("xkeep did not answer. Will download a file.")
+        }
+      } else {
+        log("xkeep did not answer. Will download a file.")
+      }
+    } catch {
+      log("Could not reach xkeep. If the app is open, allow local network for this site.")
+    }
+
     const rawPages = []
     let autoScrolling = true
 
     const isBookmarksUrl = (url) => url.includes("/graphql/") && url.includes("/Bookmarks")
 
-    const origFetch = window.fetch
     window.fetch = async function (...args) {
       const response = await origFetch.apply(this, args)
       try {
@@ -240,42 +292,75 @@
       return origSend.apply(this, args)
     }
 
-    const count = () => parseBookmarksFromGraphql(rawPages).length
+    const freshBookmarks = () => {
+      const all = parseBookmarksFromGraphql(rawPages).filter((bookmark) => !known.has(bookmark.id))
+      if (Number.isFinite(limit)) return all.slice(0, limit)
+      return all
+    }
 
-    const download = () => {
+    const wantLabel = () => (Number.isFinite(limit) ? `want ${limit}` : "all")
+
+    const unhook = () => {
       window.fetch = origFetch
       XMLHttpRequest.prototype.open = origOpen
       XMLHttpRequest.prototype.send = origSend
       autoScrolling = false
-      const bookmarks = parseBookmarksFromGraphql(rawPages)
-      const dump = { bookmarks }
-      const blob = new Blob([JSON.stringify(dump)], { type: "application/json" })
+    }
+
+    const download = (bookmarks) => {
+      const blob = new Blob([JSON.stringify({ bookmarks })], { type: "application/json" })
       const url = URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = url
       a.download = "xkeep-dump.json"
       a.click()
       setTimeout(() => URL.revokeObjectURL(url), 2000)
-      status.textContent = `Downloaded ${bookmarks.length} bookmarks`
+      log(`Downloaded ${bookmarks.length} bookmarks.`)
       stopBtn.remove()
+    }
+
+    const finish = async () => {
+      unhook()
+      const bookmarks = freshBookmarks()
+      if (importWhenDone) {
+        log(`Sending ${bookmarks.length} to xkeep…`)
+        try {
+          const response = await xkeepFetch("/api/imports", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ bookmarks }),
+          })
+          if (response.ok) {
+            log(`Imported ${bookmarks.length}.`)
+            stopBtn.remove()
+            return
+          }
+        } catch {}
+        log("Import failed. Downloading file.")
+      }
+      download(bookmarks)
     }
 
     stopBtn.onclick = () => {
       autoScrolling = false
-      download()
+      void finish()
     }
 
     const run = async () => {
-      status.textContent = `Scrolling… ${count()} captured`
+      log(`Scrolling… ${freshBookmarks().length} new (${wantLabel()})`)
       let stagnant = 0
-      let lastCount = count()
+      let lastCount = freshBookmarks().length
       while (autoScrolling) {
+        if (Number.isFinite(limit) && lastCount >= limit) {
+          log("Stopping. Hit the count.")
+          break
+        }
         window.scrollTo(0, document.documentElement.scrollHeight)
         const col = document.querySelector('[data-testid="primaryColumn"]')
         if (col) col.scrollTo(0, col.scrollHeight)
         await sleep(900)
-        const n = count()
-        status.textContent = `Scrolling… ${n} captured`
+        const n = freshBookmarks().length
+        log(`Scrolling… ${n} new (${wantLabel()})`)
         if (n > lastCount) {
           stagnant = 0
           lastCount = n
@@ -284,18 +369,21 @@
           if (stagnant >= 8) {
             window.scrollTo(0, document.documentElement.scrollHeight)
             await sleep(2000)
-            if (count() === lastCount) break
+            if (freshBookmarks().length === lastCount) {
+              log("Stopping. No new bookmarks.")
+              break
+            }
             stagnant = 0
-            lastCount = count()
+            lastCount = freshBookmarks().length
           }
         }
       }
-      if (autoScrolling) download()
+      if (autoScrolling) await finish()
     }
 
     void run()
   }
 
-  if (document.body) boot()
-  else document.addEventListener("DOMContentLoaded", boot)
+  if (document.body) void boot()
+  else document.addEventListener("DOMContentLoaded", () => void boot())
 })()

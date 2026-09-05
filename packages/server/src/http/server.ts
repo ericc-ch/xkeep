@@ -10,7 +10,7 @@ import {
 import { Effect, Layer } from "effect"
 import { AppConfig, type AppConfigOverrides } from "../config.ts"
 import { layer as loggerLayer } from "../log.ts"
-import { HttpRouter, HttpStaticServer } from "effect/unstable/http"
+import { HttpMiddleware, HttpRouter, HttpServerResponse, HttpStaticServer } from "effect/unstable/http"
 import { HttpApiBuilder, HttpApiScalar } from "effect/unstable/httpapi"
 import { drainLayer } from "../embed/drain.ts"
 import { layer as llamaLayer } from "../embed/llama.ts"
@@ -28,6 +28,16 @@ export const apiLayer = HttpApiBuilder.layer(Api, { openapiPath: OPENAPI_PATH })
   Layer.provide(handlers),
 )
 
+const corsLayer = HttpRouter.middleware(
+  (httpApp) =>
+    HttpMiddleware.cors()(httpApp).pipe(
+      Effect.map((response) =>
+        HttpServerResponse.setHeader(response, "access-control-allow-private-network", "true"),
+      ),
+    ),
+  { global: true },
+)
+
 export const serverLayer = Layer.unwrap(
   Effect.gen(function* () {
     const config = yield* AppConfig
@@ -38,6 +48,7 @@ export const serverLayer = Layer.unwrap(
         HttpApiScalar.layer(Api, { path: DOCS_PATH }),
         drainLayer,
         HttpStaticServer.layer({ root: webRoot, spa: true }),
+        corsLayer,
       ),
     ).pipe(
       Layer.provide(bookmarksLayer),
