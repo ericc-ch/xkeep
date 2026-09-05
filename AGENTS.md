@@ -13,7 +13,10 @@ Run first-party `.ts` with Nub (`nub path/to/file.ts`, `#!/usr/bin/env nub`). Us
 
 After completing a task, run:
 
-- `nub run check` — typecheck, `vitest`, lint, `@xkeep/web` build
+- `nub run check` — typecheck, `vitest`, lint, format, `build`
+- `nub run dev` — `@xkeep/cli` `service serve` + Vite
+- `nub run build` — `@xkeep/web` `dist`
+- `nub run start` — `build` then `@xkeep/cli` `service serve` (static `dist`)
 
 For TypeScript style, follow the code-conventions skill.
 

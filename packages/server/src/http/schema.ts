@@ -180,6 +180,8 @@ export class MediaNotFound extends Schema.TaggedError<MediaNotFound>()(
   { httpApiStatus: 404 },
 ) {}
 
-export const MediaName = Schema.String.check(Schema.isPattern(/^(?!\.\.?$)[A-Za-z0-9][A-Za-z0-9._-]*$/))
+export const MediaName = Schema.String.check(
+  Schema.isPattern(/^(?!\.\.?$)[A-Za-z0-9][A-Za-z0-9._-]*$/),
+)
 
 export const ClusterK = Schema.NumberFromString.check(Schema.isInt(), Schema.isGreaterThan(0))

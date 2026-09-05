@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-09-02); amended 2026-09-04 (one user-facing bin, ADR 0010); amended 2026-09-04 (server is library-only); amended 2026-09-04 (exports + CLI-owned `service.json`, ADR 0012).
+Accepted (2026-09-02); amended 2026-09-04 (one user-facing bin, ADR 0010); amended 2026-09-04 (server is library-only); amended 2026-09-04 (exports + CLI-owned `service.json`, ADR 0012); amended 2026-09-05 (root `start` builds web first).
 
 ## Context
 
@@ -14,7 +14,7 @@ The HTTP server is the product. The CLI is an HTTP client. One `src/main.ts` sti
 - `@xkeep/cli` (`packages/cli`): user-facing bin `xkeep`. Owns argv and `service.json`. `service` owns the process. `api` is a curl-style client of the running server (`operationId` via live `/api/openapi.json`, or `METHOD /path`). `service serve` lazy-imports `@xkeep/server` (`layer`). `api` / `service start|stop|status` do not import sqlite.
 - CLI depends on `"@xkeep/server": "workspace:*"`.
 - Server `exports`: `"."` is `layer(overrides)`; `"./schema"` is dump intake; `"./schema-http"` is HTTP wire; `"./api"` is the `HttpApi` value. No `./run-server`.
-- Root package `xkeep` is private and has no `bin`. `nub run start` is `xkeep service serve`.
+- Root package `xkeep` is private and has no `bin`. `nub run start` runs `build` then `xkeep service serve`.
 
 ## Consequences
 

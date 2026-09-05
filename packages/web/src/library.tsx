@@ -5,7 +5,14 @@ import { BookmarkDump } from "@xkeep/server/schema"
 import * as stylex from "@stylexjs/stylex"
 import { createEffect, createSignal, onCleanup, Show, type JSX } from "solid-js"
 import { importDump, liveAtom, pileAtom, type PileItem } from "./api.ts"
-import { createMap, hasCoords, SPREAD_DEFAULT, SPREAD_MAX, SPREAD_MIN, type MapHandle } from "./map.ts"
+import {
+  createMap,
+  hasCoords,
+  SPREAD_DEFAULT,
+  SPREAD_MAX,
+  SPREAD_MIN,
+  type MapHandle,
+} from "./map.ts"
 import { tokens } from "./tokens.stylex.ts"
 
 const chrome = stylex.create({
@@ -262,7 +269,11 @@ const LibraryView = () => {
               <p {...stylex.attrs(chrome.name)}>
                 {item().author} <span {...stylex.attrs(chrome.handle)}>@{item().handle}</span>
               </p>
-              <button type="button" {...stylex.attrs(chrome.close)} onClick={() => setOpen(undefined)}>
+              <button
+                type="button"
+                {...stylex.attrs(chrome.close)}
+                onClick={() => setOpen(undefined)}
+              >
                 close
               </button>
             </div>
@@ -281,9 +292,7 @@ const LibraryView = () => {
             </div>
           </div>
         ),
-        onFailure: () => (
-          <p {...stylex.attrs(chrome.error)}>Could not load bookmarks.</p>
-        ),
+        onFailure: () => <p {...stylex.attrs(chrome.error)}>Could not load bookmarks.</p>,
         onSuccess: (result) => {
           const ready = result.value.filter(hasCoords)
           if (result.value.length === 0) {

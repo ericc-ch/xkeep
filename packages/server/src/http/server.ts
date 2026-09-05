@@ -10,7 +10,12 @@ import {
 import { Effect, Layer } from "effect"
 import { AppConfig, type AppConfigOverrides } from "../config.ts"
 import { layer as loggerLayer } from "../log.ts"
-import { HttpMiddleware, HttpRouter, HttpServerResponse, HttpStaticServer } from "effect/unstable/http"
+import {
+  HttpMiddleware,
+  HttpRouter,
+  HttpServerResponse,
+  HttpStaticServer,
+} from "effect/unstable/http"
 import { HttpApiBuilder, HttpApiScalar } from "effect/unstable/httpapi"
 import { drainLayer } from "../embed/drain.ts"
 import { layer as llamaLayer } from "../embed/llama.ts"

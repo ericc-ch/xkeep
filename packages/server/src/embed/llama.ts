@@ -256,7 +256,12 @@ const ensureHubOrHttp = Effect.fn("ensureHubOrHttp")(function* (
   if (Option.isSome(hf)) {
     const groups = new Map<
       string,
-      { readonly repo: string; readonly rev: string; readonly localDir: string; files: Array<string> }
+      {
+        readonly repo: string
+        readonly rev: string
+        readonly localDir: string
+        files: Array<string>
+      }
     >()
     for (const item of pending) {
       const hub = parseHubFileUrl(item.url)
@@ -278,9 +283,7 @@ const ensureHubOrHttp = Effect.fn("ensureHubOrHttp")(function* (
         rev: group.rev,
         files: group.files,
         localDir: group.localDir,
-      }).pipe(
-        Effect.catch((error) => Effect.log(`hf download failed: ${String(error)}`)),
-      )
+      }).pipe(Effect.catch((error) => Effect.log(`hf download failed: ${String(error)}`)))
     }
     for (const item of pending) {
       if (!(yield* fileMeetsMin(item.dest, item.minBytes))) yield* removeIfPresent(item.dest)
@@ -405,10 +408,7 @@ const embedBatch = Effect.fn("embedBatch")(function* (
   return yield* new LlamaEmbedError({ reason: "unexpected embeddings response" })
 })
 
-const setupLlama = Effect.fn("setupLlama")(function* (
-  config: Config,
-  state: Ref.Ref<LlamaState>,
-) {
+const setupLlama = Effect.fn("setupLlama")(function* (config: Config, state: Ref.Ref<LlamaState>) {
   const fs = yield* FileSystem.FileSystem
   yield* fs.makeDirectory(config.ggufDir, { recursive: true })
   yield* ensureHubOrHttp([
@@ -503,10 +503,7 @@ export const layer = Layer.effect(
       state: Effect.fn("llama.state")(function* () {
         return yield* Ref.get(state)
       }),
-      embed: Effect.fn("llama.embed")(function* (
-        items: ReadonlyArray<EmbedItem>,
-        kind: EmbedKind,
-      ) {
+      embed: Effect.fn("llama.embed")(function* (items: ReadonlyArray<EmbedItem>, kind: EmbedKind) {
         const current = yield* Ref.get(state)
         return yield* LlamaState.$match(current, {
           starting: () => new LlamaUnavailable({ reason: "llama is starting" }),

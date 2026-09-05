@@ -3,11 +3,7 @@ import { Console, Effect } from "effect"
 import { API_PREFIX } from "@xkeep/server/schema-http"
 import { readRegistration } from "./registration.ts"
 
-const art = [
-  "  ┌─┐",
-  "  │x│  xkeep",
-  "  └─┘  local x bookmarks",
-].join("\n")
+const art = ["  ┌─┐", "  │x│  xkeep", "  └─┘  local x bookmarks"].join("\n")
 
 const row = (label: string, value: string) => `  ${label.padEnd(6)}  ${value}`
 

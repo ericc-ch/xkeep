@@ -135,7 +135,9 @@ const fillStills = Effect.fn("fillStills")(function* (bookmarksIn: ReadonlyArray
     const bus = yield* Bus
     yield* bus.publish({ event: "bookmark.upserted", data: { ids: filled } })
   }
-  yield* Effect.log(`import stills done stills=${String(stills)} stillFailed=${String(stillFailed)}`)
+  yield* Effect.log(
+    `import stills done stills=${String(stills)} stillFailed=${String(stillFailed)}`,
+  )
 })
 
 export const importDump = Effect.fn("importDump")(function* (dump: BookmarkDump) {

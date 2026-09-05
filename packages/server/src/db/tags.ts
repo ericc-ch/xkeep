@@ -16,7 +16,10 @@ const tagRow = (id: string, name: string, parentId: string) =>
   parentId === rootParent ? { id, name } : { id, name, parentId }
 
 const isUniqueFail = (error: unknown): boolean => {
-  const text = error instanceof Error ? `${error.message} ${String((error as { cause?: unknown }).cause)}` : String(error)
+  const text =
+    error instanceof Error
+      ? `${error.message} ${String((error as { cause?: unknown }).cause)}`
+      : String(error)
   return text.toLowerCase().includes("unique")
 }
 
@@ -81,7 +84,12 @@ const make = Effect.fn("Tags.make")(function* () {
       yield* db
         .insert(tags)
         .values({ id, name: input.name, parentId })
-        .pipe(Effect.catchIf(isUniqueFail, () => new TagConflict({ reason: "sibling name already exists" })))
+        .pipe(
+          Effect.catchIf(
+            isUniqueFail,
+            () => new TagConflict({ reason: "sibling name already exists" }),
+          ),
+        )
       const created = tagRow(id, input.name, parentId)
       yield* bus.publish({ event: "tag.created", data: { id: created.id } })
       return created
@@ -93,7 +101,9 @@ const make = Effect.fn("Tags.make")(function* () {
       const current = yield* requireTag(id)
       const name = patch.name ?? current.name
       const parentId =
-        patch.parentId === undefined ? current.parentId : asParentColumn(patch.parentId ?? undefined)
+        patch.parentId === undefined
+          ? current.parentId
+          : asParentColumn(patch.parentId ?? undefined)
       if (parentId === id) return yield* new TagConflict({ reason: "tag cannot parent itself" })
       if (parentId !== rootParent) yield* requireTag(parentId)
       if (parentId !== rootParent && (yield* wouldCycle(id, parentId))) {
@@ -104,7 +114,12 @@ const make = Effect.fn("Tags.make")(function* () {
         .update(tags)
         .set({ name, parentId })
         .where(eq(tags.id, id))
-        .pipe(Effect.catchIf(isUniqueFail, () => new TagConflict({ reason: "sibling name already exists" })))
+        .pipe(
+          Effect.catchIf(
+            isUniqueFail,
+            () => new TagConflict({ reason: "sibling name already exists" }),
+          ),
+        )
       const updated = tagRow(id, name, parentId)
       yield* bus.publish({ event: "tag.updated", data: { id: updated.id } })
       return updated
@@ -156,13 +171,20 @@ const make = Effect.fn("Tags.make")(function* () {
           Effect.catchTag(
             "SqlError",
             (cause) =>
-              new EffectDrizzleQueryError({ query: "Tags.replaceBookmarkTags", params: [bookmarkId], cause }),
+              new EffectDrizzleQueryError({
+                query: "Tags.replaceBookmarkTags",
+                params: [bookmarkId],
+                cause,
+              }),
           ),
         )
       const after = new Set(tagIds)
       for (const row of before) {
         if (!after.has(row.tagId)) {
-          yield* bus.publish({ event: "bookmark.untagged", data: { id: bookmarkId, tagId: row.tagId } })
+          yield* bus.publish({
+            event: "bookmark.untagged",
+            data: { id: bookmarkId, tagId: row.tagId },
+          })
         }
       }
       const beforeSet = new Set(before.map((row) => row.tagId))
@@ -180,15 +202,21 @@ const make = Effect.fn("Tags.make")(function* () {
         .from(bookmarkTags)
         .where(and(eq(bookmarkTags.bookmarkId, bookmarkId), eq(bookmarkTags.tagId, tagId)))
       if (existing[0] !== undefined) return
-      const added = yield* db.insert(bookmarkTags).values({ bookmarkId, tagId }).pipe(
-        Effect.as(true),
-        Effect.catchIf(isUniqueFail, () => Effect.succeed(false)),
-      )
+      const added = yield* db
+        .insert(bookmarkTags)
+        .values({ bookmarkId, tagId })
+        .pipe(
+          Effect.as(true),
+          Effect.catchIf(isUniqueFail, () => Effect.succeed(false)),
+        )
       if (added) {
         yield* bus.publish({ event: "bookmark.tagged", data: { id: bookmarkId, tagId } })
       }
     }),
-    removeBookmarkTag: Effect.fn("Tags.removeBookmarkTag")(function* (bookmarkId: string, tagId: string) {
+    removeBookmarkTag: Effect.fn("Tags.removeBookmarkTag")(function* (
+      bookmarkId: string,
+      tagId: string,
+    ) {
       yield* requireBookmark(bookmarkId)
       yield* requireTag(tagId)
       const existing = yield* db

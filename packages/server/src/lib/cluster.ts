@@ -79,7 +79,9 @@ const kmeans = (
 
 let session: UMAP | undefined
 
-const pairsOf = (fitted: ReadonlyArray<ReadonlyArray<number>>): ReadonlyArray<readonly [number, number]> =>
+const pairsOf = (
+  fitted: ReadonlyArray<ReadonlyArray<number>>,
+): ReadonlyArray<readonly [number, number]> =>
   fitted.map((pair) => [pair[0] ?? 0, pair[1] ?? 0] as const)
 
 const umap = (n: number) =>
@@ -89,7 +91,9 @@ const umap = (n: number) =>
     minDist: 0.1,
   })
 
-const projectFresh = (vectors: ReadonlyArray<Float32Array>): ReadonlyArray<readonly [number, number]> => {
+const projectFresh = (
+  vectors: ReadonlyArray<Float32Array>,
+): ReadonlyArray<readonly [number, number]> => {
   const n = vectors.length
   if (n === 0) return []
   if (n === 1) return [[0, 0]]
@@ -155,11 +159,17 @@ export const clusterBookmarks = Effect.fn("clusterBookmarks")(function* (input: 
     k,
     random,
   )
-  const members: Array<{ readonly id: string; readonly x: number; readonly y: number; readonly groupId: number }> = []
+  const members: Array<{
+    readonly id: string
+    readonly x: number
+    readonly y: number
+    readonly groupId: number
+  }> = []
   for (let i = 0; i < embedded.length; i++) {
     const row = embedded[i]
     const groupId = groups[i]
-    if (row === undefined || groupId === undefined || row.x === undefined || row.y === undefined) continue
+    if (row === undefined || groupId === undefined || row.x === undefined || row.y === undefined)
+      continue
     members.push({ id: row.id, x: row.x, y: row.y, groupId })
   }
   return { members, skippedUnembedded }

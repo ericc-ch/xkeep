@@ -24,10 +24,16 @@ const parseJson = (value: string): unknown => {
 }
 
 const decodeMedia = (value: string) =>
-  Option.getOrElse(Schema.decodeUnknownOption(Schema.Array(Media))(parseJson(value) ?? []), () => [])
+  Option.getOrElse(
+    Schema.decodeUnknownOption(Schema.Array(Media))(parseJson(value) ?? []),
+    () => [],
+  )
 
 const decodeStrings = (value: string) =>
-  Option.getOrElse(Schema.decodeUnknownOption(Schema.Array(Schema.String))(parseJson(value) ?? []), () => [])
+  Option.getOrElse(
+    Schema.decodeUnknownOption(Schema.Array(Schema.String))(parseJson(value) ?? []),
+    () => [],
+  )
 
 const mediaTypesOf = (row: { readonly mediaJson: string; readonly urlsJson: string }) => {
   const media = decodeMedia(row.mediaJson)
@@ -135,7 +141,9 @@ export const handlers = HttpApiBuilder.group(Api, "xkeep", (group) =>
           Stream.concat(
             Stream.merge(
               bus.subscribe(),
-              Stream.tick("15 seconds").pipe(Stream.map(() => ({ event: "heartbeat" as const, data: {} }))),
+              Stream.tick("15 seconds").pipe(
+                Stream.map(() => ({ event: "heartbeat" as const, data: {} })),
+              ),
             ),
           ),
         )

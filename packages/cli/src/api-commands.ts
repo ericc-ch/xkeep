@@ -21,7 +21,9 @@ const interpolate = (path: string, params: Record<string, string>) => {
     used.add(name)
     return encodeURIComponent(value)
   })
-  const query = new URLSearchParams(Object.entries(params).filter(([name]) => !used.has(name))).toString()
+  const query = new URLSearchParams(
+    Object.entries(params).filter(([name]) => !used.has(name)),
+  ).toString()
   return query ? `${pathname}?${query}` : pathname
 }
 
@@ -87,9 +89,9 @@ const resolveBody = Effect.fn("resolveBody")(function* (data: Option.Option<stri
   const fs = yield* FileSystem.FileSystem
   const path = value.slice(1)
   const file = path === "-" ? "/dev/stdin" : path
-  return yield* fs.readFileString(file).pipe(
-    Effect.mapError(() => new CliError({ reason: `could not read ${file}` })),
-  )
+  return yield* fs
+    .readFileString(file)
+    .pipe(Effect.mapError(() => new CliError({ reason: `could not read ${file}` })))
 })
 
 export const apiCommand = Command.make(

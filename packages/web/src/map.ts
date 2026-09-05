@@ -1,4 +1,12 @@
-import { Application, Assets, Container, FederatedPointerEvent, Graphics, Sprite, Texture } from "pixi.js"
+import {
+  Application,
+  Assets,
+  Container,
+  FederatedPointerEvent,
+  Graphics,
+  Sprite,
+  Texture,
+} from "pixi.js"
 import type { PileItem } from "./api.ts"
 
 export const SPREAD_DEFAULT = 72
@@ -18,8 +26,9 @@ type Placed = {
   readonly y: number
 }
 
-export const hasCoords = (item: PileItem): item is PileItem & { readonly x: number; readonly y: number } =>
-  "x" in item && "y" in item
+export const hasCoords = (
+  item: PileItem,
+): item is PileItem & { readonly x: number; readonly y: number } => "x" in item && "y" in item
 
 const place = (items: ReadonlyArray<PileItem>, spread: number): ReadonlyArray<Placed> =>
   items.filter(hasCoords).map((item) => ({

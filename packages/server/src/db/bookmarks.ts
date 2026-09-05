@@ -54,8 +54,9 @@ const contentUnchanged = sql`${bookmarks.text} = excluded.text
            AND ${bookmarks.mediaJson} = excluded.media_json
            AND COALESCE(excluded.still_paths, ${bookmarks.stillPaths}) IS ${bookmarks.stillPaths}`
 
-const keepIfUnchanged = (column: typeof bookmarks.embedding | typeof bookmarks.projX | typeof bookmarks.projY) =>
-  sql`CASE WHEN ${contentUnchanged} THEN ${column} ELSE NULL END`
+const keepIfUnchanged = (
+  column: typeof bookmarks.embedding | typeof bookmarks.projX | typeof bookmarks.projY,
+) => sql`CASE WHEN ${contentUnchanged} THEN ${column} ELSE NULL END`
 
 const mapRow = (row: typeof bookmarks.$inferSelect): BookmarkRow => ({
   id: row.id,

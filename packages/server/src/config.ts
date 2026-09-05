@@ -81,7 +81,8 @@ const ConfigFileSchema = Schema.Struct({
       cache: Schema.optional(
         Schema.Unknown.pipe(
           Schema.annotateKey({
-            description: "Directory for llama binaries and GGUF files. Omitted uses env-paths cache.",
+            description:
+              "Directory for llama binaries and GGUF files. Omitted uses env-paths cache.",
           }),
         ),
       ),
@@ -127,9 +128,7 @@ const ResolvedConfigSchema = Schema.Struct({
     Schema.annotateKey({ description: "HTTP bind host after flags, file, and defaults." }),
   ),
   port: Port.pipe(Schema.annotateKey({ description: "HTTP listen port after merge." })),
-  dataDir: NonBlankString.pipe(
-    Schema.annotateKey({ description: "Data directory after merge." }),
-  ),
+  dataDir: NonBlankString.pipe(Schema.annotateKey({ description: "Data directory after merge." })),
   cacheDir: NonBlankString.pipe(
     Schema.annotateKey({ description: "Download cache directory after merge." }),
   ),
@@ -144,7 +143,9 @@ const ResolvedConfigSchema = Schema.Struct({
     Schema.annotateKey({ description: "Still-image directory derived from dataDir." }),
   ),
   llamaDir: NonBlankString.pipe(
-    Schema.annotateKey({ description: "Pinned llama.cpp extract directory derived from cacheDir." }),
+    Schema.annotateKey({
+      description: "Pinned llama.cpp extract directory derived from cacheDir.",
+    }),
   ),
   ggufDir: NonBlankString.pipe(
     Schema.annotateKey({ description: "GGUF download directory derived from cacheDir." }),
@@ -172,18 +173,28 @@ const ResolvedConfigSchema = Schema.Struct({
 
 const readConfigFile = Effect.fn("readConfigFile")(function* (configPath: string) {
   const fs = yield* FileSystem.FileSystem
-  const exists = yield* fs.exists(configPath).pipe(
-    Effect.mapError(() => new ConfigError({ reason: `config file is not readable: ${configPath}` })),
-  )
+  const exists = yield* fs
+    .exists(configPath)
+    .pipe(
+      Effect.mapError(
+        () => new ConfigError({ reason: `config file is not readable: ${configPath}` }),
+      ),
+    )
   if (!exists) return undefined
-  const raw = yield* fs.readFileString(configPath).pipe(
-    Effect.mapError(() => new ConfigError({ reason: `config file is not readable: ${configPath}` })),
-  )
+  const raw = yield* fs
+    .readFileString(configPath)
+    .pipe(
+      Effect.mapError(
+        () => new ConfigError({ reason: `config file is not readable: ${configPath}` }),
+      ),
+    )
   const json = yield* Effect.try({
     try: (): unknown => JSON.parse(raw),
     catch: () => new ConfigError({ reason: `config file is not valid json: ${configPath}` }),
   })
-  return yield* Schema.decodeUnknownEffect(ConfigFileSchema, { onExcessProperty: "error" })(json).pipe(
+  return yield* Schema.decodeUnknownEffect(ConfigFileSchema, { onExcessProperty: "error" })(
+    json,
+  ).pipe(
     Effect.mapError((error) => {
       const keys: Array<string> = []
       let node: SchemaIssue.Issue | undefined = error.issue

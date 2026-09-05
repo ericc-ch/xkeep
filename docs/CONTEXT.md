@@ -6,13 +6,13 @@ Local X bookmarks app. Intake is a JSON bookmark export. No paid X API. No Chrom
 
 ## Terms
 
-| Term     | Meaning                                                |
-| -------- | ------------------------------------------------------ |
-| bookmark | One saved X post. The only pile.                       |
-| tag      | Durable hierarchical label (`id`, `name`, `parentId`). |
-| cluster  | Ephemeral query result over embeddings — not stored.   |
+| Term     | Meaning                                                                                          |
+| -------- | ------------------------------------------------------------------------------------------------ |
+| bookmark | One saved X post. The only pile.                                                                 |
+| tag      | Durable hierarchical label (`id`, `name`, `parentId`).                                           |
+| cluster  | Ephemeral query result over embeddings — not stored.                                             |
 | canvas   | Library view at `/`. Spatial map of every bookmark (thumb or trimmed text). Not a sqlite entity. |
-| daemon   | Long-lived `xkeep` server process on loopback.   |
+| daemon   | Long-lived `xkeep` server process on loopback.                                                   |
 
 ## Dump
 
@@ -37,7 +37,7 @@ Qwen3-VL-Embedding-2B via official llama.cpp Vulkan (`llama-server`, `--pooling 
 - **Hub fetch:** If `hf` is on PATH, use it for Hugging Face GGUF URLs. Parse repo/rev/file from the existing Hub URL constants (no duplicate names). One `hf download {repo} {missing files} --revision {rev} --local-dir {ggufDir}`. Inherit stdio. Binary name `hf` only. After download, min-size check; too small → delete → HTTP GET. Missing or failing `hf` also falls back to HTTP. No config key. `HF_HOME` is hf’s cache, not xkeep’s. GitHub URLs never go through `hf`.
 - **Listen:** `127.0.0.1:5337`. HttpApi is prefixed `/api` (`/api/health`, `/api/imports`, `/api/search`). OpenAPI at `/api/openapi.json`. Scalar at `/api/docs`. Origin `/` is reserved for the library UI.
 - **AppConfig:** `Context.Service` with `make(overrides)`. HTTP listen comes from the service. GGUF URLs, dims, prompts, and `LLAMA_BUILD` stay module constants. See `docs/adrs/0006-appconfig-service.md`.
-- **Tooling:** Nub (`nub install`, `nub run`, `nub` for `.ts`). Not Bun. Root `"workspaces": ["packages/*"]`. No `.node-version` pin (Node 26 on this machine).
+- **Tooling:** Nub (`nub install`, `nub run`, `nub` for `.ts`). Root `"workspaces": ["packages/*"]`. Root `dev` is serve + Vite; `build` is web `dist`; `start` is `prestart` `build` then serve. Node 26 on this machine; no `.node-version` pin.
 - **Packages:** `@xkeep/server` (`layer` + `./schema` dump + `./schema-http` wire + `./api` HttpApi), `@xkeep/cli` (`xkeep` bin, `service.json`), `@xkeep/web` (Solid 1.9 library SPA). See `docs/adrs/0004-nub-workspaces.md`, `0005`, `0010`, `0012`, `0014`.
 - **Effect:** `4.0.0-rc.112`. `@effect/platform-node` and `@effect/sql-sqlite-node` match.
 - **SQLite:** See `docs/adrs/0007-drizzle-effect-sqlite.md`. Drizzle `1.0.0-rc.4` + `@effect/sql-sqlite-node`. File is `{dataDir}/xkeep.sqlite`. `Bookmarks` is the Effect port over the bookmarks table (not a generic Database service). Tags share sqlite. `sqliteTable` as SQL shape, leak SQL errors, `EmbeddingDimsError` for dim mismatch. Kit generate + `migrate()` on boot. Upsert nulls the embedding blob when text/media/still change.
