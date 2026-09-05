@@ -64,21 +64,6 @@ export type EmbedItem = {
   readonly stillPaths: ReadonlyArray<string>
 }
 
-export class Llama extends Context.Service<
-  Llama,
-  {
-    readonly state: () => Effect.Effect<LlamaState>
-    readonly embed: (
-      items: ReadonlyArray<EmbedItem>,
-      kind: EmbedKind,
-    ) => Effect.Effect<
-      ReadonlyArray<Float32Array>,
-      LlamaUnavailable | LlamaEmbedError,
-      FileSystem.FileSystem | HttpClient.HttpClient
-    >
-  }
->()("Llama") {}
-
 const vectorFromText = (text: string): Float32Array => {
   const vec = new Float32Array(EMBED_DIMS)
   let h = 1
@@ -107,18 +92,6 @@ const vectorFromText = (text: string): Float32Array => {
   }
   return vec
 }
-
-export const layerTest = Layer.succeed(
-  Llama,
-  Llama.of({
-    state: Effect.fnUntraced(function* () {
-      return yield* Effect.succeed(LlamaState.ready())
-    }),
-    embed: Effect.fnUntraced(function* (items, _kind) {
-      return yield* Effect.succeed(items.map((item) => vectorFromText(item.text)))
-    }),
-  }),
-)
 
 const wrap = (system: string, user: string): string =>
   `<|im_start|>system\n${system}<|im_end|>\n<|im_start|>user\n${user}<|im_end|>\n<|im_start|>assistant\n`
@@ -485,40 +458,55 @@ const setupLlama = Effect.fn("setupLlama")(function* (config: Config, state: Ref
   yield* Ref.set(state, LlamaState.ready())
 })
 
-export const layer = Layer.effect(
-  Llama,
-  Effect.gen(function* () {
-    const config = yield* AppConfig
-    const state = yield* Ref.make<LlamaState>(LlamaState.starting())
-    const embedLock = yield* Semaphore.make(1)
-    yield* setupLlama(config, state).pipe(
-      Effect.catchCause((cause) =>
-        Ref.set(state, LlamaState.unavailable({ reason: Cause.pretty(cause) })).pipe(
-          Effect.andThen(Effect.logError(cause)),
-        ),
+const make = Effect.gen(function* () {
+  const config = yield* AppConfig
+  const state = yield* Ref.make<LlamaState>(LlamaState.starting())
+  const embedLock = yield* Semaphore.make(1)
+  yield* setupLlama(config, state).pipe(
+    Effect.catchCause((cause) =>
+      Ref.set(state, LlamaState.unavailable({ reason: Cause.pretty(cause) })).pipe(
+        Effect.andThen(Effect.logError(cause)),
       ),
-      Effect.forkScoped,
-    )
-    return {
-      state: Effect.fn("llama.state")(function* () {
-        return yield* Ref.get(state)
-      }),
-      embed: Effect.fn("llama.embed")(function* (items: ReadonlyArray<EmbedItem>, kind: EmbedKind) {
-        const current = yield* Ref.get(state)
-        return yield* LlamaState.$match(current, {
-          starting: () => new LlamaUnavailable({ reason: "llama is starting" }),
-          unavailable: (s) => new LlamaUnavailable({ reason: s.reason }),
-          ready: () =>
-            items.length === 0
-              ? Effect.succeed([])
-              : embedLock.withPermits(1)(
-                  embedBatch(config, items, kind).pipe(
-                    Effect.catchTag("LlamaEmbedError", (error) => error),
-                    Effect.mapError(() => new LlamaEmbedError({ reason: "embed request failed" })),
-                  ),
+    ),
+    Effect.forkScoped,
+  )
+  return {
+    state: Effect.fn("llama.state")(function* () {
+      return yield* Ref.get(state)
+    }),
+    embed: Effect.fn("llama.embed")(function* (items: ReadonlyArray<EmbedItem>, kind: EmbedKind) {
+      const current = yield* Ref.get(state)
+      return yield* LlamaState.$match(current, {
+        starting: () => new LlamaUnavailable({ reason: "llama is starting" }),
+        unavailable: (s) => new LlamaUnavailable({ reason: s.reason }),
+        ready: () =>
+          items.length === 0
+            ? Effect.succeed([])
+            : embedLock.withPermits(1)(
+                embedBatch(config, items, kind).pipe(
+                  Effect.catchTag("LlamaEmbedError", (error) => error),
+                  Effect.mapError(() => new LlamaEmbedError({ reason: "embed request failed" })),
                 ),
-        })
-      }),
-    }
+              ),
+      })
+    }),
+  }
+})
+
+export class Llama extends Context.Service<Llama>()("Llama", { make }) {
+  static readonly layer = Layer.effect(this)(this.make)
+}
+
+export const layerTest = Layer.succeed(
+  Llama,
+  Llama.of({
+    state: Effect.fnUntraced(function* () {
+      return yield* Effect.succeed(LlamaState.ready())
+    }),
+    embed: Effect.fnUntraced(function* (items, _kind) {
+      return yield* Effect.succeed(items.map((item) => vectorFromText(item.text)))
+    }),
   }),
 )
+
+export const layer = Llama.layer

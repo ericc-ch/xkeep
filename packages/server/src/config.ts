@@ -123,54 +123,6 @@ const ConfigFileSchema = Schema.Struct({
   }),
 )
 
-const ResolvedConfigSchema = Schema.Struct({
-  host: NonBlankString.pipe(
-    Schema.annotateKey({ description: "HTTP bind host after flags, file, and defaults." }),
-  ),
-  port: Port.pipe(Schema.annotateKey({ description: "HTTP listen port after merge." })),
-  dataDir: NonBlankString.pipe(Schema.annotateKey({ description: "Data directory after merge." })),
-  cacheDir: NonBlankString.pipe(
-    Schema.annotateKey({ description: "Download cache directory after merge." }),
-  ),
-  logDir: NonBlankString.pipe(
-    Schema.annotateKey({ description: "Daemon log directory after merge." }),
-  ),
-  llamaPort: Port.pipe(Schema.annotateKey({ description: "llama-server port after merge." })),
-  sqlitePath: NonBlankString.pipe(
-    Schema.annotateKey({ description: "SQLite file derived from dataDir." }),
-  ),
-  mediaDir: NonBlankString.pipe(
-    Schema.annotateKey({ description: "Still-image directory derived from dataDir." }),
-  ),
-  llamaDir: NonBlankString.pipe(
-    Schema.annotateKey({
-      description: "Pinned llama.cpp extract directory derived from cacheDir.",
-    }),
-  ),
-  ggufDir: NonBlankString.pipe(
-    Schema.annotateKey({ description: "GGUF download directory derived from cacheDir." }),
-  ),
-  textGgufPath: NonBlankString.pipe(
-    Schema.annotateKey({ description: "Text embedding GGUF path under ggufDir." }),
-  ),
-  mmprojGgufPath: NonBlankString.pipe(
-    Schema.annotateKey({ description: "mmproj GGUF path under ggufDir." }),
-  ),
-  llamaBaseUrl: NonBlankString.pipe(
-    Schema.annotateKey({ description: "http://127.0.0.1:{llamaPort} for the embed worker." }),
-  ),
-  logFile: NonBlankString.pipe(
-    Schema.annotateKey({ description: "JSON log file derived from logDir." }),
-  ),
-}).pipe(
-  Schema.annotate({
-    identifier: "ResolvedConfig",
-    title: "Resolved config",
-    description:
-      "Runtime config after flags, file, and defaults. Derived paths are included. Module constants are not.",
-  }),
-)
-
 const readConfigFile = Effect.fn("readConfigFile")(function* (configPath: string) {
   const fs = yield* FileSystem.FileSystem
   const exists = yield* fs
@@ -277,7 +229,7 @@ export class AppConfig extends Context.Service<AppConfig>()("AppConfig", {
       fallback: paths.log,
     })
     const ggufDir = `${cacheDir}/gguf`
-    return yield* Schema.decodeUnknownEffect(ResolvedConfigSchema, { onExcessProperty: "error" })({
+    return {
       host,
       port,
       dataDir,
@@ -292,11 +244,7 @@ export class AppConfig extends Context.Service<AppConfig>()("AppConfig", {
       mmprojGgufPath: `${ggufDir}/Qwen3-VL-Embedding-2B.mmproj-Q8_0.gguf`,
       llamaBaseUrl: `http://127.0.0.1:${String(llamaPort)}`,
       logFile: `${logDir}/xkeep.log`,
-    }).pipe(
-      Effect.mapError(
-        (error) => new ConfigError({ reason: `resolved config invalid: ${error.message}` }),
-      ),
-    )
+    }
   }),
 }) {
   static layer = (overrides: AppConfigOverrides) => Layer.effect(this, this.make(overrides))

@@ -1,28 +1,21 @@
-# ADR 0009: two annotated config schemas
+# ADR 0009: boundary config schema and inferred resolved snapshot
 
 ## Status
 
-Accepted (2026-09-03); amended 2026-09-05: no `importsDir`.
+Accepted (2026-09-03); amended 2026-09-05: no `importsDir`; amended 2026-09-06: the resolved snapshot is inferred from `AppConfig.make`.
 
 ## Context
 
-ADR 0008 added a JSON config file. The resolved snapshot from ADR 0006 was a plain object built in `AppConfig.make`. Callers already treat that snapshot as the only config they need. The missing piece was a second schema for the resolved shape, plus annotations on both, and one validation path so file and flags share error messages.
+ADR 0008 added a JSON config file. File values and CLI overrides are untrusted input, while the resolved snapshot and its derived paths are constructed inside `AppConfig.make`. A second schema originally decoded that constructed snapshot, duplicating invariants already enforced on each merged scalar.
 
 ## Decision
 
-Two annotated Effect Schemas:
+Keep one annotated Effect Schema at the untrusted boundary: the nested config file shape. All keys are optional, its leaves are `Unknown`, and strict `onExcessProperty: "error"` rejects unknown keys. It remains internal to the server config module and is not exported from `@xkeep/server/schema`.
 
-- Config file schema: nested, all keys optional, disk JSON only. Shape gate: `Unknown` leaves, strict `onExcessProperty: "error"`. Internal to the server config module. Not on `@xkeep/server/schema`.
-- Resolved config schema: the `AppConfig` contract. Flat and total. Includes listen, dirs, llama port, and derived fields (`sqlitePath`, `mediaDir`, `llamaDir`, `ggufDir`, `textGgufPath`, `mmprojGgufPath`, `llamaBaseUrl`, `logFile`). Module constants that do not vary per machine (`EMBED_DIMS`, prompts, GGUF download URLs, `LLAMA_BUILD`) stay outside it.
+`AppConfig.make` owns precedence and path computation (flags > file > defaults). Each merged scalar goes through `decodeField({ key, schema, raw, fallback })`; `Port` and `NonBlankString` are the value invariants. `make` then derives paths and directly returns the flat, total snapshot. TypeScript infers the service contract from `make`; trusted application-created values are not decoded a second time. Module constants that do not vary per machine (`EMBED_DIMS`, prompts, GGUF download URLs, `LLAMA_BUILD`) stay outside the snapshot.
 
-`AppConfig.make` owns precedence and path computation (flags > file > defaults). Each merged scalar goes through `decodeField({ key, schema, raw, fallback })`. `Port` and `NonBlankString` are the value invariants. `make` then Schema-decodes the built snapshot. The rest of the app sees only that decoded shape via the service.
-
-Annotations are documentation and future tooling, not runtime behavior.
-
-Boot errors stay `ConfigError`. Value failures use `invalid value for <dotted.key>: <complaint>, got <json>`. Unknown file keys use the `SchemaIssue` Pointer path as a dotted key (`listen.prot`). A failed resolved-schema decode is a derivation bug, reported as a distinct `ConfigError` reason.
-
-The resolved schema is used inside `packages/server`. It is not added to `@xkeep/server/schema` until another package needs it.
+Boot errors stay `ConfigError`. Value failures use `invalid value for <dotted.key>: <complaint>, got <json>`. Unknown file keys use the `SchemaIssue` Pointer path as a dotted key (`listen.prot`).
 
 ## Consequences
 
-`make` has one extra decode after merge. Tests that load `AppConfig` still assert the same fields. Adding a config key means one file-schema leaf plus one `decodeField` call. Adding a derived path means updating the resolved schema, not only the return object.
+Adding a config key means one file-schema leaf plus one `decodeField` call. Adding a derived path means adding it to the returned snapshot. If a package later needs a runtime codec for the resolved shape, add one at that package boundary instead of decoding trusted values during service construction.

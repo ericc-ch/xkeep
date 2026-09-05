@@ -80,52 +80,9 @@ export class EmbeddingDimsError extends Data.TaggedError("EmbeddingDimsError")<{
   readonly actual: number
 }> {}
 
-export class Bookmarks extends Context.Service<
-  Bookmarks,
-  {
-    readonly counts: () => Effect.Effect<
-      { bookmarks: number; embedded: number },
-      EffectDrizzleQueryError
-    >
-    readonly upsert: (
-      bookmark: Bookmark,
-      stillPaths: ReadonlyArray<string>,
-    ) => Effect.Effect<"inserted" | "updated", EffectDrizzleQueryError>
-    readonly setEmbedding: (
-      id: string,
-      embedding: Float32Array,
-    ) => Effect.Effect<void, EffectDrizzleQueryError | EmbeddingDimsError>
-    readonly setProjections: (
-      points: ReadonlyArray<{ readonly id: string; readonly x: number; readonly y: number }>,
-    ) => Effect.Effect<void, EffectDrizzleQueryError>
-    readonly missingEmbeddings: () => Effect.Effect<
-      ReadonlyArray<{
-        readonly id: string
-        readonly text: string
-        readonly stillPaths: ReadonlyArray<string>
-      }>,
-      EffectDrizzleQueryError
-    >
-    readonly embedded: () => Effect.Effect<
-      ReadonlyArray<{
-        readonly id: string
-        readonly handle: string
-        readonly author: string
-        readonly text: string
-        readonly embedding: Uint8Array
-        readonly projX: number | undefined
-        readonly projY: number | undefined
-      }>,
-      EffectDrizzleQueryError
-    >
-    readonly get: (id: string) => Effect.Effect<BookmarkRow | undefined, EffectDrizzleQueryError>
-    readonly list: () => Effect.Effect<ReadonlyArray<BookmarkListRow>, EffectDrizzleQueryError>
-  }
->()("Bookmarks") {}
-
-const make = Effect.fn("Bookmarks.make")(function* () {
+const make = Effect.gen(function* () {
   const db = yield* SQLiteNodeDrizzle.makeWithDefaults()
-  return Bookmarks.of({
+  return {
     counts: Effect.fn("bookmarks.counts")(function* () {
       const nBookmarks = yield* db.$count(bookmarks)
       const embedded = yield* db.$count(bookmarks, isNotNull(bookmarks.embedding))
@@ -307,7 +264,11 @@ const make = Effect.fn("Bookmarks.make")(function* () {
         tagIds: tagsByBookmark.get(row.id) ?? [],
       }))
     }),
-  })
+  }
 })
 
-export const layer = Layer.effect(Bookmarks, make()).pipe(Layer.provide(sqliteLayer))
+export class Bookmarks extends Context.Service<Bookmarks>()("Bookmarks", { make }) {
+  static readonly layer = Layer.effect(this)(this.make).pipe(Layer.provide(sqliteLayer))
+}
+
+export const layer = Bookmarks.layer
