@@ -1,5 +1,5 @@
 import { Console, Effect } from "effect"
-import { API_PREFIX } from "@xkeep/server/schema"
+import { API_PREFIX } from "@xkeep/server/http"
 import { readRegistration } from "./registration.ts"
 
 const art = [

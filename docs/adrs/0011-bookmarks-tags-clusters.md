@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-09-04) — grilled with Erick
+Accepted (2026-09-04) — grilled with Erick. Amended 2026-09-05: UMAP (not PCA) for 2d; no auto-tag; canvas is the library view. See ADR 0014.
 
 ## Context
 
@@ -24,17 +24,17 @@ Hashtags from the X dump stay on the bookmark as imported metadata (`hashtags_js
 ### Ephemeral: cluster query
 
 - **Cluster is not saved.** There is no `clusters` table and no `cluster_id` on bookmarks.
-- A **cluster query** is a read-only computation over bookmarks that already have embeddings: typically k-means in the full embedding space (2048-d), with an optional 2d projection (e.g. PCA) so the response can include human-meaningful coordinates.
+- A **cluster query** is a read-only computation over bookmarks that already have embeddings: k-means in the full embedding space (2048-d) for `groupId`, UMAP (`umap-js` on the server) for `x`,`y`.
 - Query params that matter: `k`, maybe `minSize`. Not a free "dimensions" knob for the embedding space (fixed by the model). Projection to 2d is for display/orientation in the response.
 - Response: ephemeral group ids (valid only for this response), `size`, `memberIds`, centroid (and/or projected coords). Next call may return different groupings.
 - Bookmarks still embedding: **skip** them and return `skippedUnembedded: n`. Do not block on the drain; do not pretend they were clustered.
 - **Tagging from a cluster** is client-composed: CLI/UI takes `memberIds` from the query result and calls the normal tag-apply APIs. The server does not accept "cluster id" or keep a short-lived cluster cache.
 
-Auto-tag later = sample members of an ephemeral group → create/pick a tag → apply to those ids. Still no cluster table.
+No auto-tag. The client may still take `memberIds` and call tag APIs.
 
 ### Not domain objects
 
-- **Canvas** — not an entity. A future UI may draw a cluster query; that is a view, not a table.
+- **Canvas** — not an entity. The library UI draws the last cluster query as a spatial map of thumbs. Still not a table.
 - **Stored projection** — not required as user data. If `proj_x`/`proj_y` exist later, they are cache, not source of truth.
 
 ### HTTP surface (directional)

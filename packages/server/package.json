@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/http/server.ts",
-    "./schema": "./src/schema.ts"
+    "./schema": "./src/schema.ts",
+    "./http": "./src/http/schema.ts"
   },
   "scripts": {
     "db:generate": "drizzle-kit generate"
@@ -15,7 +16,8 @@
     "@effect/sql-sqlite-node": "^4.0.0-rc.112",
     "drizzle-orm": "1.0.0-rc.4",
     "effect": "^4.0.0-rc.112",
-    "env-paths": "^4.0.0"
+    "env-paths": "^4.0.0",
+    "umap-js": "^1.4.0"
   },
   "devDependencies": {
     "drizzle-kit": "1.0.0-rc.4"

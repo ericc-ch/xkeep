@@ -1,6 +1,6 @@
 import { Console, Effect, FileSystem, Option } from "effect"
 import { Argument, Command, Flag } from "effect/unstable/cli"
-import { OPENAPI_PATH } from "@xkeep/server/schema"
+import { OPENAPI_PATH } from "@xkeep/server/http"
 import { CliError, discoverServer } from "./ensure.ts"
 
 const methods = new Set(["delete", "get", "head", "options", "patch", "post", "put"])

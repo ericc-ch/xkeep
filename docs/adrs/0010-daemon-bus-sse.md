@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-09-04); amended same day after grilling (bins, auth, events, bare command); amended 2026-09-04 (`service.json` is CLI-owned, ADR 0012).
+Accepted (2026-09-04); amended same day after grilling (bins, auth, events, bare command); amended 2026-09-04 (`service.json` is CLI-owned, ADR 0012); amended 2026-09-05 (fine bookmark ids, open browser when SPA exists — ADR 0014).
 
 ## Context
 
@@ -45,13 +45,13 @@ cli / web  --HTTP mutation-->  server writes sqlite
 
 - Keep Effect `HttpApi` as the contract. Reads and mutations stay REST (GET/POST/PUT/PATCH) and appear in OpenAPI. Mount the API under `/api` so `/` stays free for the library UI (`/api/health`, `/api/openapi.json`, `/api/docs`).
 - Add one streaming endpoint, `GET /api/events` (SSE). Document it as SSE in the spec; do not invent a second RPC surface.
-- CLI and web both use HTTP (and `@xkeep/server/schema` for types). No sqlite imports in clients (ADR 0005, 0012).
+- CLI and web both use HTTP (and `@xkeep/server/http` for wire types). No sqlite imports in clients (ADR 0005, 0012).
 
 ### In-process bus (not event sourcing)
 
 - After a successful sqlite commit, publish a tagged event on an Effect `PubSub`.
-- **Fine:** `tag.created` / `tag.updated` / `tag.deleted`, `bookmark.tagged` / `bookmark.untagged`.
-- **Coarse:** `bookmarks.changed` `{ reason }` for import, embed drain, and other bulk rewrites.
+- **Fine:** `tag.created` / `tag.updated` / `tag.deleted`, `bookmark.tagged` / `bookmark.untagged`, `bookmark.upserted` `{ ids }`, `bookmark.embedded` `{ ids }`.
+- No coarse `bookmarks.changed` (ADR 0014).
 - Publishers do not know subscribers. HTTP handlers and the embed drain both publish; neither imports the UI.
 - Events are **notifications**, not the source of truth. Sqlite rows remain authoritative. Cluster queries do not publish (read-only, ephemeral — ADR 0011).
 - Do **not** introduce an append-only event table or projectors for bookmark/tag mutations in v1. Opencode's durable session log is explicitly not copied.
@@ -74,7 +74,7 @@ Copy opencode's _lifecycle idea_, not its multi-contender election (many clients
 
 **Auth:** trust loopback. No password in `service.json` (pid/host/port/url/startedAt only). Revisit if bind leaves `127.0.0.1`.
 
-**Bare `xkeep` (no subcommand):** ensure daemon, print the ready banner (art, pid when registered, origin, `/api/`, `xkeep api` example). Do not print llama state: HTTP is up while setup is still forked, so it would almost always say starting. Do **not** open a browser until a real UI package exists (do not train landing on `/api/docs`).
+**Bare `xkeep` (no subcommand):** ensure daemon, print the ready banner (art, pid when registered, origin, `/api/`, `xkeep api` example). Do not print llama state: HTTP is up while setup is still forked, so it would almost always say starting. Open the origin once the library SPA exists. Until then do not open `/api/docs`.
 
 **Ensure URL** (bare + `service start` / `restart`): `--url` if set → probe that URL only (do not spawn). Else a `service.json` whose pid is alive and `GET /api/health` is HTTP 200 with `status: ok`. Else default `http://127.0.0.1:8787`. Else spawn detached `xkeep service serve`. Do not wait for `llama: ready`.
 
@@ -117,8 +117,8 @@ This revises ADR 0008's "CLI reads no discovery file": the CLI may read `service
 
 1. Daemon ensure + `service *` + `api` from HttpApi (no bus/sse yet); bare command prints the ready banner.
 2. Bus + `GET /api/events` (prove with curl / EventSource).
-3. Tag tree + bookmark-tag APIs + ephemeral cluster query.
-4. Real web UI later.
+3. Tag tree + bookmark-tag APIs + ephemeral cluster query + pile/media GETs (ADR 0014).
+4. Real web UI at `/` (opens browser).
 
 ## Consequences
 
@@ -126,5 +126,5 @@ This revises ADR 0008's "CLI reads no discovery file": the CLI may read `service
 - Cold CLI pays a one-time daemon spawn; warm CLI is a health check + HTTP.
 - Web UI can stay up indefinitely while the user runs many CLI commands.
 - No event-log migration, no projector framework, no WebSocket stack in v1.
-- No stored cluster rows to invalidate; tag events are stable ids; bulk import/embed use coarse `bookmarks.changed`.
+- No stored cluster rows to invalidate; tag events are stable ids; import/embed publish `bookmark.upserted` / `bookmark.embedded` with ids (ADR 0014).
 - Opencode's durable session event sourcing remains a reference if we later need auditable replay for a specific aggregate; it is not the default for bookmark/tag CRUD.

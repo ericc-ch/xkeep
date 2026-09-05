@@ -1,9 +1,41 @@
 import { Context, Data, Effect, FileSystem, Layer, Option, Path, Ref } from "effect"
 import { Headers, HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
 import { AppConfig } from "../config.ts"
-import { ImportBusy, type Bookmark, type BookmarkDump } from "../schema.ts"
-import { Bookmarks } from "../bookmarks/bookmarks.ts"
-import { isAllowedStillUrl, stillExtension, stillUrls } from "../media/still.ts"
+import { Bookmarks } from "../db/bookmarks.ts"
+import { ImportBusy } from "../http/schema.ts"
+import type { Bookmark, BookmarkDump } from "../schema.ts"
+import { Bus } from "../bus.ts"
+
+const stillUrls = (bookmark: Bookmark): ReadonlyArray<string> => {
+  const urls: Array<string> = []
+  for (const item of bookmark.media) {
+    if (item.type === "photo") {
+      urls.push(item.url)
+      continue
+    }
+    if (item.poster !== undefined) urls.push(item.poster)
+  }
+  return urls
+}
+
+const stillExtension = (url: string): string => {
+  const path = url.split("?")[0] ?? url
+  const dot = path.lastIndexOf(".")
+  if (dot < 0) return ".jpg"
+  const ext = path.slice(dot).toLowerCase()
+  if (ext === ".jpeg" || ext === ".jpg" || ext === ".png" || ext === ".webp" || ext === ".gif") {
+    return ext
+  }
+  return ".jpg"
+}
+
+const isAllowedStillUrl = (url: string): boolean => {
+  if (!URL.canParse(url)) return false
+  const parsed = new URL(url)
+  if (parsed.protocol !== "https:") return false
+  const host = parsed.hostname
+  return host === "pbs.twimg.com" || host === "video.twimg.com" || host.endsWith(".twimg.com")
+}
 
 export class ImportError extends Data.TaggedError("ImportError")<{
   readonly reason: string
@@ -71,6 +103,7 @@ const fillStills = Effect.fn("fillStills")(function* (bookmarksIn: ReadonlyArray
   const bookmarks = yield* Bookmarks
   let stills = 0
   let stillFailed = 0
+  const filled: Array<string> = []
   for (const bookmark of bookmarksIn) {
     const stillPaths: Array<string> = []
     for (const [i, url] of stillUrls(bookmark).entries()) {
@@ -93,7 +126,14 @@ const fillStills = Effect.fn("fillStills")(function* (bookmarksIn: ReadonlyArray
         stillFailed += 1
       }
     }
-    if (stillPaths.length > 0) yield* bookmarks.upsert(bookmark, stillPaths)
+    if (stillPaths.length > 0) {
+      yield* bookmarks.upsert(bookmark, stillPaths)
+      filled.push(bookmark.id)
+    }
+  }
+  if (filled.length > 0) {
+    const bus = yield* Bus
+    yield* bus.publish({ event: "bookmark.upserted", data: { ids: filled } })
   }
   yield* Effect.log(`import stills done stills=${String(stills)} stillFailed=${String(stillFailed)}`)
 })
@@ -118,11 +158,17 @@ export const importDump = Effect.fn("importDump")(function* (dump: BookmarkDump)
     let imported = 0
     let updated = 0
     let stillsPending = 0
+    const ids: Array<string> = []
     for (const bookmark of dump.bookmarks) {
       stillsPending += stillUrls(bookmark).length
       const outcome = yield* bookmarks.upsert(bookmark, [])
+      ids.push(bookmark.id)
       if (outcome === "inserted") imported += 1
       else updated += 1
+    }
+    const bus = yield* Bus
+    if (ids.length > 0) {
+      yield* bus.publish({ event: "bookmark.upserted", data: { ids } })
     }
     const missing = yield* bookmarks.missingEmbeddings()
     yield* Effect.forkDetach(

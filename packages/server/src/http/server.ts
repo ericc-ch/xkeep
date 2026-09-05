@@ -1,5 +1,5 @@
 import { createServer } from "node:http"
-import { NodeFileSystem, NodeHttpClient, NodeHttpServer } from "@effect/platform-node"
+import { NodeFileSystem, NodeHttpClient, NodeHttpServer, NodePath } from "@effect/platform-node"
 import { Effect, Layer } from "effect"
 import { AppConfig, type AppConfigOverrides } from "../config.ts"
 import { layer as loggerLayer } from "../log.ts"
@@ -7,9 +7,11 @@ import { HttpRouter } from "effect/unstable/http"
 import { HttpApiBuilder, HttpApiScalar } from "effect/unstable/httpapi"
 import { drainLayer } from "../embed/drain.ts"
 import { layer as llamaLayer } from "../embed/llama.ts"
-import { layer as bookmarksLayer } from "../bookmarks/bookmarks.ts"
-import { Import } from "../import/import-dump.ts"
-import { DOCS_PATH, OPENAPI_PATH } from "../schema.ts"
+import { layer as bookmarksLayer } from "../db/bookmarks.ts"
+import { layer as tagsLayer } from "../db/tags.ts"
+import { Bus } from "../bus.ts"
+import { Import } from "../lib/import.ts"
+import { DOCS_PATH, OPENAPI_PATH } from "./schema.ts"
 import { Api } from "./api.ts"
 import { handlers } from "./handlers.ts"
 
@@ -26,9 +28,12 @@ export const serverLayer = Layer.unwrap(
       Layer.mergeAll(apiLayer, HttpApiScalar.layer(Api, { path: DOCS_PATH }), drainLayer),
     ).pipe(
       Layer.provide(bookmarksLayer),
+      Layer.provide(tagsLayer),
+      Layer.provide(Bus.layer),
       Layer.provide(Import.layer),
       Layer.provide(llamaLayer),
       Layer.provide(NodeHttpClient.layerNodeHttp),
+      Layer.provide(NodePath.layer),
       Layer.provideMerge(
         NodeHttpServer.layer(() => createServer(), { host: config.host, port: config.port }),
       ),

@@ -1,7 +1,7 @@
 import { rmSync } from "node:fs"
-import { NodeFileSystem, NodeHttpClient, NodeHttpServer } from "@effect/platform-node"
+import { NodeFileSystem, NodeHttpClient, NodeHttpServer, NodePath } from "@effect/platform-node"
 import { describe, expect, it } from "vitest"
-import { Data, Effect, FileSystem, Layer, Schema } from "effect"
+import { Data, Effect, FileSystem, Layer, Option, Schema, Stream } from "effect"
 import { HttpClient, HttpClientRequest, HttpRouter } from "effect/unstable/http"
 import { HttpApiClient, HttpApiTest } from "effect/unstable/httpapi"
 import { AppConfig } from "../src/config.ts"
@@ -11,8 +11,10 @@ import { layerTest as llamaLayerTest } from "../src/embed/llama.ts"
 import { Api } from "../src/http/api.ts"
 import { handlers } from "../src/http/handlers.ts"
 import { apiLayer } from "../src/http/server.ts"
-import { layer as bookmarksLayer } from "../src/bookmarks/bookmarks.ts"
-import { Import } from "../src/import/import-dump.ts"
+import { layer as bookmarksLayer } from "../src/db/bookmarks.ts"
+import { layer as tagsLayer } from "../src/db/tags.ts"
+import { Bus } from "../src/bus.ts"
+import { Import } from "../src/lib/import.ts"
 import dumpJson from "./fixtures/dump.json" with { type: "json" }
 
 const dataDir = "/tmp/xkeep-e2e"
@@ -29,10 +31,14 @@ const appConfigLayer = AppConfig.layer({
 
 const e2eLayer = Layer.mergeAll(handlers, drainLayer).pipe(
   Layer.provide(bookmarksLayer),
+  Layer.provide(tagsLayer),
+  Layer.provide(Bus.layer),
   Layer.provide(Import.layer),
   Layer.provide(llamaLayerTest),
   Layer.provide(NodeHttpClient.layerNodeHttp),
+  Layer.provide(NodePath.layer),
   Layer.provide(appConfigLayer),
+  Layer.provideMerge(NodeFileSystem.layer),
   Layer.provideMerge(NodeHttpServer.layerHttpServices),
 )
 
@@ -162,6 +168,98 @@ describe.sequential("HttpApi", () => {
     )
   }, 30_000)
 
+  it("GET /api/bookmarks lists the imported tweet", async () => {
+    resetDataDir()
+    await run(
+      Effect.gen(function* () {
+        const client = yield* HttpApiTest.groups(Api, ["xkeep"])
+        yield* client.importDump({ payload: dump })
+        yield* waitUntilImportIdle(client)
+        const listed = yield* client.listBookmarks()
+        expect(listed.bookmarks).toHaveLength(1)
+        expect(listed.bookmarks[0]?.id).toBe(canaryId)
+        expect(listed.bookmarks[0]?.still).toBe(`/api/media/${canaryId}-0.jpg`)
+        const bytes = yield* client.getMedia({ params: { name: `${canaryId}-0.jpg` } })
+        expect(bytes.byteLength).toBeGreaterThan(0)
+      }),
+    )
+  }, 30_000)
+
+  it("GET /api/events names the first event server.connected", async () => {
+    resetDataDir()
+    await run(
+      Effect.gen(function* () {
+        const client = yield* HttpApiTest.groups(Api, ["xkeep"])
+        const first = yield* Stream.runHead(yield* client.events())
+        expect(Option.getOrThrow(first).event).toBe("server.connected")
+      }),
+    )
+  }, 30_000)
+
+  it("rejects duplicate root tag names and tag cycles", async () => {
+    resetDataDir()
+    await run(
+      Effect.gen(function* () {
+        const client = yield* HttpApiTest.groups(Api, ["xkeep"])
+        const parent = yield* client.createTag({ payload: { name: "gpu" } })
+        const clash = yield* client.createTag({ payload: { name: "gpu" } }).pipe(Effect.exit)
+        expect(clash._tag).toBe("Failure")
+        const child = yield* client.createTag({ payload: { name: "kernels", parentId: parent.id } })
+        const cycle = yield* client
+          .updateTag({ params: { id: parent.id }, payload: { parentId: child.id } })
+          .pipe(Effect.exit)
+        expect(cycle._tag).toBe("Failure")
+        yield* client.deleteTag({ params: { id: parent.id } })
+        const listed = yield* client.listTags()
+        expect(listed.tags).toHaveLength(1)
+        expect(listed.tags[0]?.id).toBe(child.id)
+        expect(listed.tags[0]?.parentId).toBeUndefined()
+      }),
+    )
+  }, 30_000)
+
+  it("PUT /api/bookmarks/:id/tags rejects duplicate ids", async () => {
+    resetDataDir()
+    await run(
+      Effect.gen(function* () {
+        const client = yield* HttpApiTest.groups(Api, ["xkeep"])
+        yield* client.importDump({ payload: dump })
+        yield* waitUntilImportIdle(client)
+        const tag = yield* client.createTag({ payload: { name: "gpu" } })
+        const dup = yield* client
+          .replaceBookmarkTags({
+            params: { id: canaryId },
+            payload: { tagIds: [tag.id, tag.id] },
+          })
+          .pipe(Effect.exit)
+        expect(dup._tag).toBe("Failure")
+      }),
+    )
+  }, 30_000)
+
+  it("tags apply and cluster after embed", async () => {
+    resetDataDir()
+    await run(
+      Effect.gen(function* () {
+        const client = yield* HttpApiTest.groups(Api, ["xkeep"])
+        yield* client.importDump({ payload: dump })
+        yield* waitUntilImportIdle(client)
+        yield* waitUntilEmbedded(client)
+        const tag = yield* client.createTag({ payload: { name: "gpu" } })
+        yield* client.addBookmarkTag({ params: { id: canaryId, tagId: tag.id } })
+        const one = yield* client.getBookmark({ params: { id: canaryId } })
+        expect(one.tagIds).toEqual([tag.id])
+        const clustered = yield* client.cluster({ query: {} })
+        expect(clustered.skippedUnembedded).toBe(0)
+        expect(clustered.members).toHaveLength(1)
+        expect(clustered.members[0]?.id).toBe(canaryId)
+        const listed = yield* client.listBookmarks()
+        expect(listed.bookmarks[0]?.x).toBeTypeOf("number")
+        expect(listed.bookmarks[0]?.tagIds).toEqual([tag.id])
+      }),
+    )
+  }, 30_000)
+
   it("POST /api/imports with a bad payload returns 400", async () => {
     resetDataDir()
     const listenLayer = HttpRouter.serve(apiLayer, {
@@ -169,8 +267,11 @@ describe.sequential("HttpApi", () => {
       disableLogger: true,
     }).pipe(
       Layer.provide(bookmarksLayer),
+      Layer.provide(tagsLayer),
+      Layer.provide(Bus.layer),
       Layer.provide(Import.layer),
       Layer.provide(llamaLayerTest),
+      Layer.provide(NodePath.layer),
       Layer.provide(appConfigLayer),
       Layer.provideMerge(NodeHttpServer.layerTest),
     )
@@ -184,6 +285,60 @@ describe.sequential("HttpApi", () => {
             ),
           )
           expect(response.status).toBe(400)
+        }).pipe(Effect.provide(Layer.fresh(listenLayer))),
+      ) as Effect.Effect<void>,
+    )
+  }, 30_000)
+
+  it("GET /api/media/.. is rejected", async () => {
+    resetDataDir()
+    const listenLayer = HttpRouter.serve(apiLayer, {
+      disableListenLog: true,
+      disableLogger: true,
+    }).pipe(
+      Layer.provide(bookmarksLayer),
+      Layer.provide(tagsLayer),
+      Layer.provide(Bus.layer),
+      Layer.provide(Import.layer),
+      Layer.provide(llamaLayerTest),
+      Layer.provide(NodePath.layer),
+      Layer.provide(appConfigLayer),
+      Layer.provideMerge(NodeHttpServer.layerTest),
+    )
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const client = yield* HttpClient.HttpClient
+          const response = yield* client.execute(HttpClientRequest.get("/api/media/.."))
+          expect(response.status).toBe(404)
+        }).pipe(Effect.provide(Layer.fresh(listenLayer))),
+      ) as Effect.Effect<void>,
+    )
+  }, 30_000)
+
+  it("GET /api/clusters?k=nope returns 400", async () => {
+    resetDataDir()
+    const listenLayer = HttpRouter.serve(apiLayer, {
+      disableListenLog: true,
+      disableLogger: true,
+    }).pipe(
+      Layer.provide(bookmarksLayer),
+      Layer.provide(tagsLayer),
+      Layer.provide(Bus.layer),
+      Layer.provide(Import.layer),
+      Layer.provide(llamaLayerTest),
+      Layer.provide(NodePath.layer),
+      Layer.provide(appConfigLayer),
+      Layer.provideMerge(NodeHttpServer.layerTest),
+    )
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const client = yield* HttpClient.HttpClient
+          const bad = yield* client.execute(HttpClientRequest.get("/api/clusters?k=nope"))
+          expect(bad.status).toBe(400)
+          const zero = yield* client.execute(HttpClientRequest.get("/api/clusters?k=0"))
+          expect(zero.status).toBe(400)
         }).pipe(Effect.provide(Layer.fresh(listenLayer))),
       ) as Effect.Effect<void>,
     )

@@ -66,7 +66,7 @@ add a userscript or thin extension only when the re-export ritual starts to suck
 1. `npx xkeep` — library opens. empty state explains the dump.
 2. go to bookmarks, paste / bookmarklet, get json.
 3. drop the file. embedding starts in the background.
-4. search works first. canvas is one click away on the same vectors.
+4. the library is a spatial map of every bookmark (thumb or trimmed text). search and filters highlight.
 
 foss people will tolerate a first-run GGUF + llama-server download. they will not tolerate clone / venv / drivers / then maybe it captures. `npx` is the install. gpu drivers are a one-time host problem (already done on gl503ge).
 
@@ -91,10 +91,10 @@ in:
 - file intake (bookmarklet + console snippet + drag-drop). incremental import, dedupe on tweet id
 - sqlite + media dir on disk, default `~/.local/share/xkeep/`
 - embed: `Qwen/Qwen3-VL-Embedding-2B` via official vulkan `llama-server` (b10752). fused text+stills vector (all photos, or video/gif poster), 2048-d stored
-- search is the front door (semantic + keyword)
-- filters: author, media type (text / image / video / article / link), date, tags
-- auto tags from clusters. manual override. no llm pass
-- canvas is a room: umap (or equivalent) + cluster blobs, click into a tweet. not the first screen
+- home is the spatial map of the pile (thumbs / trimmed text)
+- search is semantic only; it highlights ids already on the map
+- filters (author, media type, date, tags) highlight in the tab. no auto-tag
+- k-means for groups, umap for x,y. click a thumb for the full tweet
 - localhost only
 
 out of v1:
@@ -154,17 +154,15 @@ one backend. validated on gl503ge (2026-09-02). see `docs/adrs/0001-qwen-llamacp
 - `--embedding --pooling last --embd-normalize 2`; image cap 256 tokens; prompt cache off
 - drain loop in the app process: wait until llama is ready, embed rows with a null blob, retry after errors
 - search: query text → embedding → brute-force cosine over an in-memory matrix. no vector index in v1
-- canvas: 2d projection of the same vectors later. search can highlight a neighborhood instead of a list
+- canvas: umap x,y of the same vectors. search and filters highlight ids on that map
 
 ### ui
 
-search bar is home. results are a list/masonry, not the canvas.
+the library opens on the spatial map. every bookmark is a still thumb or trimmed text.
 
-filters sit next to search: author, type, date, tag (auto or manual).
+search and filters highlight. they do not swap in a result list as home.
 
-canvas is a second view on the same query. clusters labeled. click a point, see the tweet. no force-graph theatre.
-
-tagging: click a cluster, name it. click a tweet, add/remove tags. auto tags never overwrite manual.
+tagging: click a tweet, add/remove tags. no auto-tag. see ADR 0014.
 
 ### capture quality
 
@@ -211,6 +209,6 @@ working folder on gl503ge: `~/projects/x-bookmarks/`
 | llama.cpp gguf | pinned b10752; `--embedding --pooling last --embd-normalize 2`; image cap 256 tokens          |
 | x bookmarks    | shadow-copy, never delete                                                                     |
 | scope          | bookmarks only                                                                                |
-| tags           | clusters + manual, no llm                                                                     |
-| home screen    | search, not canvas                                                                            |
+| tags           | manual only, no llm, no auto-tag                                                              |
+| home screen    | spatial map (thumbs), search/filters highlight                                                |
 | network        | localhost                                                                                     |

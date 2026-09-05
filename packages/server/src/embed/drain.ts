@@ -1,6 +1,7 @@
 import { Effect, Layer } from "effect"
 import { Llama, LlamaEmbedError, LlamaState } from "./llama.ts"
-import { Bookmarks } from "../bookmarks/bookmarks.ts"
+import { Bookmarks } from "../db/bookmarks.ts"
+import { Bus } from "../bus.ts"
 
 const BATCH = 8
 
@@ -28,6 +29,7 @@ const drainOnce = Effect.fn("drainOnce")(function* () {
             reason: `embed batch length mismatch: got ${String(vectors.length)} want ${String(chunk.length)}`,
           })
         }
+        const ids: Array<string> = []
         for (let i = 0; i < chunk.length; i++) {
           const row = chunk[i]
           const vec = vectors[i]
@@ -35,6 +37,11 @@ const drainOnce = Effect.fn("drainOnce")(function* () {
             return yield* new LlamaEmbedError({ reason: "embed batch index missing" })
           }
           yield* bookmarks.setEmbedding(row.id, vec)
+          ids.push(row.id)
+        }
+        if (ids.length > 0) {
+          const bus = yield* Bus
+          yield* bus.publish({ event: "bookmark.embedded", data: { ids } })
         }
       }),
   })
