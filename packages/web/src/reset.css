@@ -1,0 +1,12 @@
+html,
+body,
+#app {
+  margin: 0;
+  height: 100%;
+  background: #0c0d10;
+  color: #ece8e1;
+}
+
+* {
+  box-sizing: border-box;
+}

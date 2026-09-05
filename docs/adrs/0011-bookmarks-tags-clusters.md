@@ -24,7 +24,7 @@ Hashtags from the X dump stay on the bookmark as imported metadata (`hashtags_js
 ### Ephemeral: cluster query
 
 - **Cluster is not saved.** There is no `clusters` table and no `cluster_id` on bookmarks.
-- A **cluster query** is a read-only computation over bookmarks that already have embeddings: k-means in the full embedding space (2048-d) for `groupId`, UMAP (`umap-js` on the server) for `x`,`y`.
+- A **cluster query** is a read-only k-means over bookmarks that already have embeddings (2048-d) for `groupId`. `x`,`y` are not computed here: the drain writes UMAP (`umap-js`) onto a row once; later rows transform into the same space. Import cannot project (no vectors yet).
 - Query params that matter: `k`, maybe `minSize`. Not a free "dimensions" knob for the embedding space (fixed by the model). Projection to 2d is for display/orientation in the response.
 - Response: ephemeral group ids (valid only for this response), `size`, `memberIds`, centroid (and/or projected coords). Next call may return different groupings.
 - Bookmarks still embedding: **skip** them and return `skippedUnembedded: n`. Do not block on the drain; do not pretend they were clustered.

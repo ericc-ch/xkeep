@@ -7,7 +7,7 @@
   ],
   "type": "module",
   "scripts": {
-    "check": "nub run typecheck && nub run test && nub run lint",
+    "check": "nub run typecheck && nub run test && nub run lint && nub run --filter @xkeep/web build",
     "format": "oxfmt",
     "lint": "oxlint --fix",
     "prepare": "effect-language-service patch && nub scripts/references.ts",

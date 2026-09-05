@@ -112,6 +112,8 @@ export class Bookmarks extends Context.Service<
         readonly author: string
         readonly text: string
         readonly embedding: Uint8Array
+        readonly projX: number | undefined
+        readonly projY: number | undefined
       }>,
       EffectDrizzleQueryError
     >
@@ -234,6 +236,8 @@ const make = Effect.fn("Bookmarks.make")(function* () {
           author: bookmarks.author,
           text: bookmarks.text,
           embedding: bookmarks.embedding,
+          projX: bookmarks.projX,
+          projY: bookmarks.projY,
         })
         .from(bookmarks)
         .where(isNotNull(bookmarks.embedding))
@@ -246,6 +250,8 @@ const make = Effect.fn("Bookmarks.make")(function* () {
             author: row.author,
             text: row.text,
             embedding: row.embedding,
+            projX: row.projX ?? undefined,
+            projY: row.projY ?? undefined,
           },
         ]
       })

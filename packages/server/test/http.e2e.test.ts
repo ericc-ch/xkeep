@@ -1,5 +1,11 @@
 import { rmSync } from "node:fs"
-import { NodeFileSystem, NodeHttpClient, NodeHttpServer, NodePath } from "@effect/platform-node"
+import {
+  NodeChildProcessSpawner,
+  NodeFileSystem,
+  NodeHttpClient,
+  NodeHttpServer,
+  NodePath,
+} from "@effect/platform-node"
 import { describe, expect, it } from "vitest"
 import { Data, Effect, FileSystem, Layer, Option, Schema, Stream } from "effect"
 import { HttpClient, HttpClientRequest, HttpRouter } from "effect/unstable/http"
@@ -37,6 +43,7 @@ const e2eLayer = Layer.mergeAll(handlers, drainLayer).pipe(
   Layer.provide(llamaLayerTest),
   Layer.provide(NodeHttpClient.layerNodeHttp),
   Layer.provide(NodePath.layer),
+  Layer.provide(NodeChildProcessSpawner.layer),
   Layer.provide(appConfigLayer),
   Layer.provideMerge(NodeFileSystem.layer),
   Layer.provideMerge(NodeHttpServer.layerHttpServices),
@@ -75,7 +82,10 @@ const waitUntilEmbedded = Effect.fn("waitUntilEmbedded")(function* (
 ) {
   for (let i = 0; i < 80; i++) {
     const health = yield* client.health()
-    if (health.bookmarks > 0 && health.embedded === health.bookmarks) return health
+    if (health.bookmarks > 0 && health.embedded === health.bookmarks) {
+      const listed = yield* client.listBookmarks()
+      if (listed.bookmarks.every((row) => "x" in row && "y" in row)) return health
+    }
     yield* Effect.sleep("50 millis")
   }
   return yield* new EmbedTimeout({ reason: "embeddings did not catch up" })

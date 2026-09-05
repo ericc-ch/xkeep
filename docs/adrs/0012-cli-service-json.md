@@ -12,10 +12,10 @@ Accepted (2026-09-04)
 
 - `@xkeep/server` `"."` is `layer(overrides)`: listen, sqlite, embed. No `service.json`.
 - `@xkeep/server/schema` is the dump intake codec only.
-- `@xkeep/server/http` is HTTP wire (paths, health, pile, tags, SSE, search). Not `HttpApi`, not daemon IO, not listen defaults.
+- `@xkeep/server/schema-http` is HTTP wire (paths, health, pile, tags, SSE, search). Not daemon IO, not listen defaults.
+- `@xkeep/server/api` is the `HttpApi` value for `HttpApiClient` / `AtomHttpApi`. No handlers, no Node, no sqlite.
 - The CLI writes, reads, and clears `service.json` (`packages/cli`). `service serve` resolves listen via `AppConfig` on the heavy entry, then writes the file. Spawned serve is still that command, so the child writes the file.
-- `HttpApi` (`Api`) stays unexported. Tests import it by path. `xkeep api` and a future web UI use HTTP / OpenAPI.
 
 ## Consequences
 
-`api` / `start` / `status` import `@xkeep/server/http` plus CLI registration. Only `service serve` imports `@xkeep/server`. Web must not import `"."`.
+`api` / `start` / `status` import `@xkeep/server/schema-http` plus CLI registration. Web imports `./api` and `./schema-http`. Only `service serve` imports `@xkeep/server`. Web must not import `"."`.

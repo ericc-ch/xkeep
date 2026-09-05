@@ -45,7 +45,7 @@ cli / web  --HTTP mutation-->  server writes sqlite
 
 - Keep Effect `HttpApi` as the contract. Reads and mutations stay REST (GET/POST/PUT/PATCH) and appear in OpenAPI. Mount the API under `/api` so `/` stays free for the library UI (`/api/health`, `/api/openapi.json`, `/api/docs`).
 - Add one streaming endpoint, `GET /api/events` (SSE). Document it as SSE in the spec; do not invent a second RPC surface.
-- CLI and web both use HTTP (and `@xkeep/server/http` for wire types). No sqlite imports in clients (ADR 0005, 0012).
+- CLI and web both use HTTP (`@xkeep/server/schema-http` for wire types; web also `@xkeep/server/api`). No sqlite imports in clients (ADR 0005, 0012).
 
 ### In-process bus (not event sourcing)
 

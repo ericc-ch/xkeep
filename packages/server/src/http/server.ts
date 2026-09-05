@@ -1,9 +1,16 @@
 import { createServer } from "node:http"
-import { NodeFileSystem, NodeHttpClient, NodeHttpServer, NodePath } from "@effect/platform-node"
+import { fileURLToPath } from "node:url"
+import {
+  NodeChildProcessSpawner,
+  NodeFileSystem,
+  NodeHttpClient,
+  NodeHttpServer,
+  NodePath,
+} from "@effect/platform-node"
 import { Effect, Layer } from "effect"
 import { AppConfig, type AppConfigOverrides } from "../config.ts"
 import { layer as loggerLayer } from "../log.ts"
-import { HttpRouter } from "effect/unstable/http"
+import { HttpRouter, HttpStaticServer } from "effect/unstable/http"
 import { HttpApiBuilder, HttpApiScalar } from "effect/unstable/httpapi"
 import { drainLayer } from "../embed/drain.ts"
 import { layer as llamaLayer } from "../embed/llama.ts"
@@ -24,8 +31,14 @@ export const apiLayer = HttpApiBuilder.layer(Api, { openapiPath: OPENAPI_PATH })
 export const serverLayer = Layer.unwrap(
   Effect.gen(function* () {
     const config = yield* AppConfig
+    const webRoot = fileURLToPath(new URL("../../../web/dist", import.meta.url))
     return HttpRouter.serve(
-      Layer.mergeAll(apiLayer, HttpApiScalar.layer(Api, { path: DOCS_PATH }), drainLayer),
+      Layer.mergeAll(
+        apiLayer,
+        HttpApiScalar.layer(Api, { path: DOCS_PATH }),
+        drainLayer,
+        HttpStaticServer.layer({ root: webRoot, spa: true }),
+      ),
     ).pipe(
       Layer.provide(bookmarksLayer),
       Layer.provide(tagsLayer),
@@ -34,6 +47,7 @@ export const serverLayer = Layer.unwrap(
       Layer.provide(llamaLayer),
       Layer.provide(NodeHttpClient.layerNodeHttp),
       Layer.provide(NodePath.layer),
+      Layer.provide(NodeChildProcessSpawner.layer),
       Layer.provideMerge(
         NodeHttpServer.layer(() => createServer(), { host: config.host, port: config.port }),
       ),

@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process"
 import { Socket } from "node:net"
 import { Console, Data, Effect, FileSystem, Option, Schedule, Schema } from "effect"
-import { HEALTH_PATH, Health } from "@xkeep/server/http"
+import { HEALTH_PATH, Health } from "@xkeep/server/schema-http"
 import { readRegistration, serviceRegistrationPath } from "./registration.ts"
 
 const HTTP_HOST_DEFAULT = "127.0.0.1"

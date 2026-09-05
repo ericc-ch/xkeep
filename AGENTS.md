@@ -19,6 +19,7 @@ For TypeScript style, follow the code-conventions skill.
 
 - `packages/server` — HTTP library (`drizzle/` migrations, `db:generate`)
 - `packages/cli` — user-facing bin (`service`, `api`)
+- `packages/web` — library SPA (Solid + Pixi). Server serves `dist` at `/`.
 - `scripts/` — install-time tooling (`references.ts`)
 - `docs/PLAN.md` — product shape
 

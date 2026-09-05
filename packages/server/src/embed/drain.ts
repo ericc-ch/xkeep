@@ -1,9 +1,28 @@
-import { Effect, Layer } from "effect"
+import { Effect, FileSystem, Layer, Path } from "effect"
 import { Llama, LlamaEmbedError, LlamaState } from "./llama.ts"
 import { Bookmarks } from "../db/bookmarks.ts"
 import { Bus } from "../bus.ts"
+import { LLAMA_PARALLEL } from "../config.ts"
+import { projectBookmarks } from "../lib/cluster.ts"
+import { ensureStillRungs, rungPath } from "../lib/thumbs.ts"
 
-const BATCH = 8
+const backfillRungs = Effect.fn("backfillRungs")(function* (limit: number) {
+  const bookmarks = yield* Bookmarks
+  const fs = yield* FileSystem.FileSystem
+  const pathMod = yield* Path.Path
+  const rows = yield* bookmarks.list()
+  let wrote = 0
+  for (const row of rows) {
+    if (wrote >= limit) return
+    for (const stillPath of row.stillPaths) {
+      if (wrote >= limit) return
+      const ready = rungPath(stillPath, 256, pathMod)
+      if (yield* fs.exists(ready)) continue
+      yield* ensureStillRungs(stillPath)
+      wrote += 1
+    }
+  }
+})
 
 const drainOnce = Effect.fn("drainOnce")(function* () {
   const bookmarks = yield* Bookmarks
@@ -16,10 +35,16 @@ const drainOnce = Effect.fn("drainOnce")(function* () {
       Effect.gen(function* () {
         const missing = yield* bookmarks.missingEmbeddings()
         if (missing.length === 0) {
+          yield* backfillRungs(16)
           yield* Effect.sleep("1 second")
           return
         }
-        const chunk = missing.slice(0, BATCH)
+        const chunk = missing.slice(0, LLAMA_PARALLEL)
+        for (const row of chunk) {
+          for (const stillPath of row.stillPaths) {
+            yield* ensureStillRungs(stillPath)
+          }
+        }
         const vectors = yield* llama.embed(
           chunk.map((row) => ({ text: row.text, stillPaths: row.stillPaths })),
           "document",
@@ -39,10 +64,9 @@ const drainOnce = Effect.fn("drainOnce")(function* () {
           yield* bookmarks.setEmbedding(row.id, vec)
           ids.push(row.id)
         }
-        if (ids.length > 0) {
-          const bus = yield* Bus
-          yield* bus.publish({ event: "bookmark.embedded", data: { ids } })
-        }
+        yield* projectBookmarks()
+        const bus = yield* Bus
+        yield* bus.publish({ event: "bookmark.embedded", data: { ids } })
       }),
   })
 })

@@ -13,7 +13,7 @@ The HTTP server is the product. The CLI is an HTTP client. One `src/main.ts` sti
 - `@xkeep/server` (`packages/server`): sqlite, media, embed, HTTP, dump schema, `HttpApi`. Library only: no shebang, no `Command`, no `bin`.
 - `@xkeep/cli` (`packages/cli`): user-facing bin `xkeep`. Owns argv and `service.json`. `service` owns the process. `api` is a curl-style client of the running server (`operationId` via live `/api/openapi.json`, or `METHOD /path`). `service serve` lazy-imports `@xkeep/server` (`layer`). `api` / `service start|stop|status` do not import sqlite.
 - CLI depends on `"@xkeep/server": "workspace:*"`.
-- Server `exports`: `"."` is `layer(overrides)`; `"./schema"` is HTTP wire schemas. No `./api`, no `./run-server`.
+- Server `exports`: `"."` is `layer(overrides)`; `"./schema"` is dump intake; `"./schema-http"` is HTTP wire; `"./api"` is the `HttpApi` value. No `./run-server`.
 - Root package `xkeep` is private and has no `bin`. `nub run start` is `xkeep service serve`.
 
 ## Consequences

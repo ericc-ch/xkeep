@@ -30,9 +30,9 @@ The daemon already has health, import, and semantic search. The library tab need
 
 - `GET /api/clusters?k=` (required, default **12** if omitted). Optional `minSize`.
 - k-means in 2048-d → `groupId` (not stored; `k` can change).
-- UMAP (`umap-js`) → `x`, `y`. Write those onto the bookmark row as cache. Null `x`,`y` when the embedding is nulled. Next pile GET can draw without running UMAP. Recompute UMAP only when the tab asks for clusters (or coords are missing and the tab asks).
-- Members: `id`, `x`, `y`, `groupId`. Plus `skippedUnembedded`.
-- Rows with no `x`,`y`: the tab puts them on a **simple grid**. Not a server layout.
+- UMAP (`umap-js`) runs on the drain. First unprojected batch `fit`s; later batches `transform` into that space. Rows that already have `x`,`y` are not rewritten. Null `x`,`y` when the embedding is nulled. The cluster GET does not run UMAP. The tab does not ask for clusters to place thumbs.
+- Members: `id`, cached `x`, `y`, `groupId`. Plus `skippedUnembedded`. Rows still missing coords are omitted from `members`.
+- Rows with no `x`,`y`: the tab does not draw them. Drain writes coords after embed; then they appear.
 - Events do not run UMAP or k-means.
 
 ### Tags
@@ -53,10 +53,12 @@ Keep `tag.*` and `bookmark.tagged` / `untagged`. Cluster reads still do not publ
 
 ### Canvas kit
 
-- Map: GPU sprites (Pixi-class). tldraw is **out** (license; 5k unique thumbs = 0–2 fps on gl503ge).
-- Open bookmark: **one** HTML card in **world space**. Same camera matrix as the thumbs (translate + scale). Not a viewport modal. Not html-in-canvas (Firefox; Chrome OT only). The card paints above the whole map. One open at a time. Thumbs stay sprites. Tried in `/tmp/pixi-5k` (2026-09-05): feels right.
+- Map: GPU sprites (Pixi-class). tldraw is **out** (license; 5k unique thumbs = 0–2 fps on gl503ge). One live Application; SSE patches marks. Do not remount.
+- Marks: dark plate + first still at **native aspect**. No tweet body on the map (Pixi text is a bitmap and goes soft). No still → plate only. UMAP `x`,`y` are AOT on the drain. The tab places `x * spread`, `-y * spread` (slider, persisted). Camera zoom is separate. Marks counter-scale only when zoomed out so they stay readable; zooming in enlarges them with the camera. Plates are square-cornered with a 1px pad.
+- Stills: drain / import write aspect-preserving WebP rungs **32 / 64 / 128 / 256** beside the original (`name.64.webp`). Map fetches the rung that matches on-screen long-edge. Original only in the open card.
+- Open bookmark: **one** HTML card **pinned to the mark in screen space at 1×** (moves with the camera, does not `scale()` with it). Sharp DOM type + original still. Not a viewport modal. Not html-in-canvas. One open at a time. Thumbs stay sprites.
 - Chrome (search, filters, drop) is still normal page HTML. FPS throwaways live under `/tmp` only.
-- Package: `packages/web`. React for chrome + the in-world card. Pixi for the map. Server serves the built files at `/`.
+- Package: `packages/web`. Solid 1.9 for chrome + the in-world card. Pixi 8 for the map. StyleX (`stylex.attrs`). TanStack Router 1.x. `@effect/atom-solid` + `AtomHttpApi` over `@xkeep/server/api`. SSE is `client.events()` (`StreamSse`), not raw `EventSource`. Server serves `dist` at `/`. Solid 2 waits until `@effect/atom-solid` peers it.
 
 ## Consequences
 
