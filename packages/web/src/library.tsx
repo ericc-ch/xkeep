@@ -229,7 +229,7 @@ const LibraryView = () => {
     >
       <div {...stylex.attrs(chrome.bar)}>
         <h1 {...stylex.attrs(chrome.title)}>xkeep</h1>
-        <span {...stylex.attrs(chrome.hint)}>drop a bookmarks dump</span>
+        <span {...stylex.attrs(chrome.hint)}>drop a bookmarks export</span>
         <label {...stylex.attrs(chrome.spread)}>
           spread
           <input
@@ -292,8 +292,8 @@ const LibraryView = () => {
                 <div {...stylex.attrs(chrome.card)}>
                   <p {...stylex.attrs(chrome.lead)}>The library is empty.</p>
                   <p {...stylex.attrs(chrome.copy)}>
-                    On x.com/i/bookmarks, dump a json file (xkeep-dump/1) and drop it here. Embeddings
-                    fill in the background. Search and tags come next.
+                    On x.com/i/bookmarks, run the export snippet and drop the JSON file here.
+                    Embeddings fill in the background. Search and tags come next.
                   </p>
                 </div>
               </div>

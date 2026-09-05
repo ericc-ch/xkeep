@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-09-03); amended 2026-09-04: CLI may read `service.json` (ADR 0012), still not this file.
+Accepted (2026-09-03); amended 2026-09-04: CLI may read `service.json` (ADR 0012), still not this file; amended 2026-09-05: default listen port is `5337`.
 
 ## Context
 
@@ -22,7 +22,7 @@ One JSON file at the env-paths config dir (`~/.config/xkeep/config.json`), read 
 
 ```json
 {
-  "listen": { "host": "127.0.0.1", "port": 8787 },
+  "listen": { "host": "127.0.0.1", "port": 5337 },
   "paths": { "data": "/mnt/hdd/xkeep", "cache": "/mnt/hdd/x-cache", "log": "/mnt/hdd/xkeep-log" },
   "llama": { "port": 8913 }
 }

@@ -5,4 +5,3 @@ result
 .direnv/
 *.log
 xkeep-dump.json
-x-bookmarks-dump.json

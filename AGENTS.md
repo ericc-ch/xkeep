@@ -5,7 +5,7 @@ xkeep is a local X bookmarks app. Nub + Effect. Product shape is in `docs/PLAN.m
 - **Server** — `packages/server`: Effect HTTP on localhost. sqlite via Drizzle + `@effect/sql-sqlite-node`, embed worker, `HttpApi`. v1 intake is a json file. No paid X API. No chrome extension in v1.
 - **CLI** — `packages/cli`: user-facing `xkeep` bin. `service *` manages the daemon and `service.json`. `api` is curl against the running server (`GET /api/openapi.json` for operation ids). `service serve` loads `@xkeep/server` (`layer`).
 - **Web** — `packages/web`: Solid + Pixi library SPA. Server serves `dist` at `/`.
-- **Dump** — `scripts/dump-bookmarks.js`: console snippet for `x.com/i/bookmarks` → `xkeep-dump/1` json.
+- **Dump** — `scripts/dump-bookmarks.js`: console snippet for `x.com/i/bookmarks` → bookmark export JSON.
 - **References sync** — `scripts/references.ts`: shallow-clones upstream sources into `/tmp/references/`.
 
 Use Nub as package manager (`nub install`).

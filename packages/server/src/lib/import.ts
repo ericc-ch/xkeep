@@ -140,21 +140,10 @@ const fillStills = Effect.fn("fillStills")(function* (bookmarksIn: ReadonlyArray
 
 export const importDump = Effect.fn("importDump")(function* (dump: BookmarkDump) {
   const gate = yield* Import
-  const config = yield* AppConfig
-  const fs = yield* FileSystem.FileSystem
-  const pathMod = yield* Path.Path
   const bookmarks = yield* Bookmarks
   yield* gate.begin()
-  const fileName = `${dump.captured_at.replaceAll(":", "-")}.json`
-  const dest = pathMod.join(config.importsDir, fileName)
-  yield* Effect.log(
-    `import start sqlite=${config.sqlitePath} copy=${dest} media=${config.mediaDir} bookmarks=${String(dump.bookmarks.length)}`,
-  )
+  yield* Effect.log(`import start bookmarks=${String(dump.bookmarks.length)}`)
   const result = yield* Effect.gen(function* () {
-    yield* fs
-      .writeFileString(dest, JSON.stringify(dump))
-      .pipe(Effect.mapError(() => new ImportError({ reason: "could not write import copy" })))
-    yield* Effect.log(`import copy written ${dest}`)
     let imported = 0
     let updated = 0
     let stillsPending = 0
@@ -179,7 +168,7 @@ export const importDump = Effect.fn("importDump")(function* (dump: BookmarkDump)
       { startImmediately: true },
     )
     yield* Effect.log(
-      `import rows written copy=${dest} imported=${String(imported)} updated=${String(updated)} stillsPending=${String(stillsPending)} pendingEmbeddings=${String(missing.length)}`,
+      `import rows written imported=${String(imported)} updated=${String(updated)} stillsPending=${String(stillsPending)} pendingEmbeddings=${String(missing.length)}`,
     )
     return {
       imported,

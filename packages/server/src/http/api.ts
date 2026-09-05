@@ -18,7 +18,6 @@ import {
   ClusterResult,
   Health,
   ImportBusy,
-  ImportFailed,
   ImportResult,
   MediaName,
   MediaNotFound,
@@ -47,7 +46,7 @@ export const Api = HttpApi.make("xkeep")
         HttpApiEndpoint.post("importDump", "/imports", {
           payload: BookmarkDump,
           success: ImportResult,
-          error: [ImportFailed, ImportBusy, HttpApiError.InternalServerError],
+          error: [ImportBusy, HttpApiError.InternalServerError],
         }),
       )
       .add(

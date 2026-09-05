@@ -1,6 +1,4 @@
 ;(() => {
-  const DUMP_SCHEMA = "xkeep-dump/1"
-
   const boot = () => {
     if (!location.hostname.includes("x.com") && !location.hostname.includes("twitter.com")) {
       alert("Paste this on x.com (History / Bookmarks).")
@@ -250,13 +248,7 @@
       XMLHttpRequest.prototype.send = origSend
       autoScrolling = false
       const bookmarks = parseBookmarksFromGraphql(rawPages)
-      const dump = {
-        schema: DUMP_SCHEMA,
-        source: "bookmark",
-        captured_at: new Date().toISOString(),
-        bookmarks,
-        raw_pages: rawPages,
-      }
+      const dump = { bookmarks }
       const blob = new Blob([JSON.stringify(dump)], { type: "application/json" })
       const url = URL.createObjectURL(blob)
       const a = document.createElement("a")

@@ -1,7 +1,4 @@
 {
-  "schema": "xkeep-dump/1",
-  "source": "bookmark",
-  "captured_at": "2026-09-02T00:00:00.000Z",
   "bookmarks": [
     {
       "id": "1890000000000000123",
@@ -19,6 +16,5 @@
       "hashtags": [],
       "urls": []
     }
-  ],
-  "raw_pages": []
+  ]
 }

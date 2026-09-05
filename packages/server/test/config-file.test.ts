@@ -47,7 +47,7 @@ describe("AppConfig config file", () => {
       const config = await load({ configPath: join(dir, "missing.json") })
       expect(config).toMatchObject({
         host: "127.0.0.1",
-        port: 8787,
+        port: 5337,
         llamaPort: 8913,
         dataDir: paths.data,
         cacheDir: paths.cache,
@@ -62,7 +62,7 @@ describe("AppConfig config file", () => {
       const config = await load({ configPath: writeConfig(dir, {}) })
       expect(config).toMatchObject({
         host: "127.0.0.1",
-        port: 8787,
+        port: 5337,
         llamaPort: 8913,
         dataDir: paths.data,
         cacheDir: paths.cache,
@@ -91,7 +91,6 @@ describe("AppConfig config file", () => {
       expect(config.logFile).toBe("/tmp/cfg-log/xkeep.log")
       expect(config.sqlitePath).toBe("/tmp/cfg-data/xkeep.sqlite")
       expect(config.mediaDir).toBe("/tmp/cfg-data/media")
-      expect(config.importsDir).toBe("/tmp/cfg-data/imports")
       expect(config.ggufDir).toBe("/tmp/cfg-cache/gguf")
       expect(config.llamaBaseUrl).toBe("http://127.0.0.1:9001")
     })

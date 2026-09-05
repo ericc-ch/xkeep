@@ -1,12 +1,6 @@
 import { Schema } from "effect"
 
-const DUMP_SCHEMA = "xkeep-dump/1" as const
-
 const TweetId = Schema.String.check(Schema.isPattern(/^[0-9]{6,32}$/))
-
-const CapturedAt = Schema.String.check(
-  Schema.isPattern(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/),
-)
 
 export const Media = Schema.Struct({
   type: Schema.Literals(["photo", "video", "gif"]),
@@ -43,11 +37,7 @@ export const BookmarkCodec: Schema.Codec<Bookmark> = Schema.Struct({
 })
 
 export const BookmarkDump = Schema.Struct({
-  schema: Schema.Literals([DUMP_SCHEMA, "x-bookmarks-dump/1"]),
-  source: Schema.Literal("bookmark"),
-  captured_at: CapturedAt,
   bookmarks: Schema.Array(BookmarkCodec),
-  raw_pages: Schema.Array(Schema.Unknown),
 })
 
 export type BookmarkDump = typeof BookmarkDump.Type

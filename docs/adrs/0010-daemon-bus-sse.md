@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-09-04); amended same day after grilling (bins, auth, events, bare command); amended 2026-09-04 (`service.json` is CLI-owned, ADR 0012); amended 2026-09-05 (fine bookmark ids, open the origin — ADR 0014). Ship slices below are done.
+Accepted (2026-09-04); amended same day after grilling (bins, auth, events, bare command); amended 2026-09-04 (`service.json` is CLI-owned, ADR 0012); amended 2026-09-05 (fine bookmark ids, open the origin — ADR 0014); amended 2026-09-05 (default listen `5337`). Ship slices below are done.
 
 ## Context
 
@@ -76,7 +76,7 @@ Copy opencode's _lifecycle idea_, not its multi-contender election (many clients
 
 **Bare `xkeep` (no subcommand):** ensure daemon, print the ready banner (art, pid when registered, origin, `/api/`, `xkeep api` example). Do not print llama state: HTTP is up while setup is still forked, so it would almost always say starting. Open the origin (`xdg-open`). Do not open `/api/docs`.
 
-**Ensure URL** (bare + `service start` / `restart`): `--url` if set → probe that URL only (do not spawn). Else a `service.json` whose pid is alive and `GET /api/health` is HTTP 200 with `status: ok`. Else default `http://127.0.0.1:8787`. Else spawn detached `xkeep service serve`. Do not wait for `llama: ready`.
+**Ensure URL** (bare + `service start` / `restart`): `--url` if set → probe that URL only (do not spawn). Else a `service.json` whose pid is alive and `GET /api/health` is HTTP 200 with `status: ok`. Else default `http://127.0.0.1:5337`. Else spawn detached `xkeep service serve`. Do not wait for `llama: ready`.
 
 **`api` URL** (no spawn): same probe order, then fail with “run `xkeep service start`” if nothing is up.
 

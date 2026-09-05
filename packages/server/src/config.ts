@@ -5,7 +5,7 @@ const APP_NAME = "xkeep"
 
 export const LLAMA_BUILD = "b10752"
 export const LLAMA_PORT_DEFAULT = 8913
-export const HTTP_PORT_DEFAULT = 8787
+export const HTTP_PORT_DEFAULT = 5337
 export const HTTP_HOST_DEFAULT = "127.0.0.1"
 export const IMAGE_MAX_TOKENS = 256
 export const LLAMA_PARALLEL = 4
@@ -59,7 +59,7 @@ const ConfigFileSchema = Schema.Struct({
       ),
       port: Schema.optional(
         Schema.Unknown.pipe(
-          Schema.annotateKey({ description: "HTTP listen port. Omitted uses 8787." }),
+          Schema.annotateKey({ description: "HTTP listen port. Omitted uses 5337." }),
         ),
       ),
     }).pipe(
@@ -74,7 +74,7 @@ const ConfigFileSchema = Schema.Struct({
       data: Schema.optional(
         Schema.Unknown.pipe(
           Schema.annotateKey({
-            description: "Directory for sqlite, media, and imports. Omitted uses env-paths data.",
+            description: "Directory for sqlite and media. Omitted uses env-paths data.",
           }),
         ),
       ),
@@ -95,7 +95,7 @@ const ConfigFileSchema = Schema.Struct({
     }).pipe(
       Schema.annotate({
         title: "Paths",
-        description: "On-disk directories for sqlite, media, imports, download cache, and logs.",
+        description: "On-disk directories for sqlite, media, download cache, and logs.",
       }),
     ),
   ),
@@ -142,9 +142,6 @@ const ResolvedConfigSchema = Schema.Struct({
   ),
   mediaDir: NonBlankString.pipe(
     Schema.annotateKey({ description: "Still-image directory derived from dataDir." }),
-  ),
-  importsDir: NonBlankString.pipe(
-    Schema.annotateKey({ description: "Imported dump directory derived from dataDir." }),
   ),
   llamaDir: NonBlankString.pipe(
     Schema.annotateKey({ description: "Pinned llama.cpp extract directory derived from cacheDir." }),
@@ -278,7 +275,6 @@ export class AppConfig extends Context.Service<AppConfig>()("AppConfig", {
       llamaPort,
       sqlitePath: `${dataDir}/xkeep.sqlite`,
       mediaDir: `${dataDir}/media`,
-      importsDir: `${dataDir}/imports`,
       llamaDir: `${cacheDir}/llama-${LLAMA_BUILD}`,
       ggufDir,
       textGgufPath: `${ggufDir}/Qwen3-VL-Embedding-2B.Q4_K_M.gguf`,

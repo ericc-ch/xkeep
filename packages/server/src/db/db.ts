@@ -13,7 +13,6 @@ const clientLayer = Layer.unwrap(
     const fs = yield* FileSystem.FileSystem
     yield* fs.makeDirectory(config.dataDir, { recursive: true })
     yield* fs.makeDirectory(config.mediaDir, { recursive: true })
-    yield* fs.makeDirectory(config.importsDir, { recursive: true })
     return sqliteClientLayer({ filename: config.sqlitePath })
   }),
 )

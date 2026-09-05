@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-09-04)
+Accepted (2026-09-04); amended 2026-09-05: no `imports/` copy.
 
 ## Context
 
@@ -12,7 +12,7 @@ Options: keep blocking (A); return after the dump file is saved (B); upsert sqli
 
 ## Decision
 
-**C.** Validate the dump, write `imports/{captured_at}.json`, upsert every bookmark with empty still paths, return `{ imported, updated, stillsPending, pendingEmbeddings }`. A detached fiber downloads stills and upserts paths (ADR 0007 nulls embeddings when stills change). One import at a time: a second POST while that fiber runs is `409 ImportBusy`. `GET /api/health` includes `import: idle | running`. CLI stays one-shot; it prints the upsert result and does not wait for stills.
+**C.** Validate the export (`{ bookmarks }`), upsert every bookmark with empty still paths, return `{ imported, updated, stillsPending, pendingEmbeddings }`. Do not write an on-disk copy of the export. A detached fiber downloads stills and upserts paths (ADR 0007 nulls embeddings when stills change). One import at a time: a second POST while that fiber runs is `409 ImportBusy`. `GET /api/health` includes `import: idle | running`. CLI stays one-shot; it prints the upsert result and does not wait for stills.
 
 Rejected: A (the hang). B (library empty until stills finish). Queued or concurrent imports.
 

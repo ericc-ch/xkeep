@@ -10,12 +10,7 @@ import { clusterBookmarks, DEFAULT_CLUSTER_K } from "../lib/cluster.ts"
 import { importDump, Import } from "../lib/import.ts"
 import { search } from "../lib/search.ts"
 import { BookmarkCodec, Media } from "../schema.ts"
-import {
-  BookmarkNotFound,
-  ImportFailed,
-  ImportStatus,
-  MediaNotFound,
-} from "./schema.ts"
+import { BookmarkNotFound, ImportStatus, MediaNotFound } from "./schema.ts"
 import { Api } from "./api.ts"
 
 const mediaHref = (absPath: string): string => `/api/media/${basename(absPath)}`
@@ -114,7 +109,6 @@ export const handlers = HttpApiBuilder.group(Api, "xkeep", (group) =>
           return yield* importDump(ctx.payload)
         },
         Effect.catchTags({
-          ImportError: (error) => new ImportFailed({ reason: error.reason }),
           ImportBusy: (error) => error,
           EffectDrizzleQueryError: () => new HttpApiError.InternalServerError(),
         }),

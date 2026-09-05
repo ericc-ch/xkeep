@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-09-02)
+Accepted (2026-09-02); amended 2026-09-05: data dir is sqlite + `media/` only.
 
 ## Context
 
@@ -12,7 +12,7 @@ Media + sqlite + GGUF are large. Defaults should follow XDG via `env-paths`, but
 
 Use `env-paths` with name `xkeep` and `suffix: ""`.
 
-- data: sqlite, `media/`, `imports/`
+- data: sqlite, `media/`
 - cache: Vulkan `llama-server` binary, GGUF + mmproj
 - log: daemon JSON log (`xkeep.log`). Default is env-paths `log` (`~/.local/state/xkeep` on Linux).
 - config: as env-paths defines

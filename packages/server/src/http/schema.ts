@@ -8,12 +8,6 @@ export const DOCS_PATH = "/api/docs" as const
 
 export { BookmarkDump }
 
-export class ImportFailed extends Schema.TaggedError<ImportFailed>()(
-  "ImportFailed",
-  { reason: Schema.String },
-  { httpApiStatus: 400 },
-) {}
-
 export class ImportBusy extends Schema.TaggedError<ImportBusy>()(
   "ImportBusy",
   { reason: Schema.String },

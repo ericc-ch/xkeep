@@ -5,7 +5,7 @@ import { HEALTH_PATH, Health } from "@xkeep/server/schema-http"
 import { readRegistration, serviceRegistrationPath } from "./registration.ts"
 
 const HTTP_HOST_DEFAULT = "127.0.0.1"
-const HTTP_PORT_DEFAULT = 8787
+const HTTP_PORT_DEFAULT = 5337
 
 export class CliError extends Data.TaggedError("CliError")<{
   readonly reason: string

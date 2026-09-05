@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-09-03)
+Accepted (2026-09-03); amended 2026-09-05: no `importsDir`.
 
 ## Context
 
@@ -13,7 +13,7 @@ ADR 0008 added a JSON config file. The resolved snapshot from ADR 0006 was a pla
 Two annotated Effect Schemas:
 
 - Config file schema: nested, all keys optional, disk JSON only. Shape gate: `Unknown` leaves, strict `onExcessProperty: "error"`. Internal to the server config module. Not on `@xkeep/server/schema`.
-- Resolved config schema: the `AppConfig` contract. Flat and total. Includes listen, dirs, llama port, and derived fields (`sqlitePath`, `mediaDir`, `importsDir`, `llamaDir`, `ggufDir`, `textGgufPath`, `mmprojGgufPath`, `llamaBaseUrl`, `logFile`). Module constants that do not vary per machine (`EMBED_DIMS`, prompts, GGUF download URLs, `LLAMA_BUILD`) stay outside it.
+- Resolved config schema: the `AppConfig` contract. Flat and total. Includes listen, dirs, llama port, and derived fields (`sqlitePath`, `mediaDir`, `llamaDir`, `ggufDir`, `textGgufPath`, `mmprojGgufPath`, `llamaBaseUrl`, `logFile`). Module constants that do not vary per machine (`EMBED_DIMS`, prompts, GGUF download URLs, `LLAMA_BUILD`) stay outside it.
 
 `AppConfig.make` owns precedence and path computation (flags > file > defaults). Each merged scalar goes through `decodeField({ key, schema, raw, fallback })`. `Port` and `NonBlankString` are the value invariants. `make` then Schema-decodes the built snapshot. The rest of the app sees only that decoded shape via the service.
 
