@@ -1,233 +1,149 @@
-import { randomUUID } from "node:crypto"
-import { and, eq } from "drizzle-orm"
+import { and, eq, inArray, sql } from "drizzle-orm"
 import { EffectDrizzleQueryError } from "drizzle-orm/effect-core/errors"
 import * as SQLiteNodeDrizzle from "drizzle-orm/effect-sqlite-node"
 import { Context, Effect, Layer } from "effect"
 import { Bus } from "../bus.ts"
-import { BookmarkNotFound, TagConflict, TagNotFound } from "../http/schema.ts"
+import { BookmarkNotFound } from "../http/schema.ts"
 import { sqliteLayer } from "./db.ts"
-import { bookmarkTags, bookmarks, tags } from "./schema.ts"
-
-const rootParent = ""
-
-const asParentColumn = (parentId: string | undefined): string => parentId ?? rootParent
-
-const tagRow = (id: string, name: string, parentId: string) =>
-  parentId === rootParent ? { id, name } : { id, name, parentId }
-
-const isUniqueFail = (error: unknown): boolean => {
-  const text =
-    error instanceof Error
-      ? `${error.message} ${String((error as { cause?: unknown }).cause)}`
-      : String(error)
-  return text.toLowerCase().includes("unique")
-}
+import { bookmarkTags, bookmarks } from "./schema.ts"
 
 const make = Effect.fn("Tags.make")(function* () {
   const db = yield* SQLiteNodeDrizzle.makeWithDefaults()
   const bus = yield* Bus
-  const requireTag = Effect.fn("Tags.requireTag")(function* (id: string) {
-    const rows = yield* db
-      .select({ id: tags.id, name: tags.name, parentId: tags.parentId })
-      .from(tags)
-      .where(eq(tags.id, id))
-    const row = rows[0]
-    if (row === undefined) return yield* new TagNotFound({ id })
-    return row
-  })
   const requireBookmark = Effect.fn("Tags.requireBookmark")(function* (id: string) {
     const rows = yield* db.select({ id: bookmarks.id }).from(bookmarks).where(eq(bookmarks.id, id))
     if (rows[0] === undefined) return yield* new BookmarkNotFound({ id })
   })
-  const assertSiblingFree = Effect.fn("Tags.assertSiblingFree")(function* (input: {
-    readonly name: string
-    readonly parentId: string
-    readonly exceptId?: string | undefined
-  }) {
-    const rows = yield* db
-      .select({ id: tags.id })
-      .from(tags)
-      .where(and(eq(tags.parentId, input.parentId), eq(tags.name, input.name)))
-    const clash = rows.find((row) => row.id !== input.exceptId)
-    if (clash !== undefined) {
-      return yield* new TagConflict({ reason: "sibling name already exists" })
-    }
+  const linksFor = Effect.fn("Tags.linksFor")(function* (bookmarkId: string) {
+    return yield* db
+      .select({ tag: bookmarkTags.tag })
+      .from(bookmarkTags)
+      .where(eq(bookmarkTags.bookmarkId, bookmarkId))
   })
-  const wouldCycle = Effect.fn("Tags.wouldCycle")(function* (id: string, parentId: string) {
-    let current: string | undefined = parentId
-    const seen = new Set<string>()
-    while (current !== undefined && current !== rootParent) {
-      if (current === id) return true
-      if (seen.has(current)) return true
-      seen.add(current)
-      const rows: ReadonlyArray<{ readonly parentId: string }> = yield* db
-        .select({ parentId: tags.parentId })
-        .from(tags)
-        .where(eq(tags.id, current))
-      current = rows[0]?.parentId
-    }
-    return false
-  })
+  const wrap = (query: string, params: ReadonlyArray<string>, cause: unknown) =>
+    new EffectDrizzleQueryError({ query, params: [...params], cause })
   return {
     list: Effect.fn("Tags.list")(function* () {
-      const rows = yield* db.select().from(tags)
-      return rows.map((row) => tagRow(row.id, row.name, row.parentId))
-    }),
-    create: Effect.fn("Tags.create")(function* (input: {
-      readonly name: string
-      readonly parentId?: string | undefined
-    }) {
-      const parentId = asParentColumn(input.parentId)
-      if (input.parentId !== undefined) yield* requireTag(input.parentId)
-      yield* assertSiblingFree({ name: input.name, parentId })
-      const id = randomUUID()
-      yield* db
-        .insert(tags)
-        .values({ id, name: input.name, parentId })
-        .pipe(
-          Effect.catchIf(
-            isUniqueFail,
-            () => new TagConflict({ reason: "sibling name already exists" }),
-          ),
-        )
-      const created = tagRow(id, input.name, parentId)
-      yield* bus.publish({ event: "tag.created", data: { id: created.id } })
-      return created
-    }),
-    update: Effect.fn("Tags.update")(function* (
-      id: string,
-      patch: { readonly name?: string | undefined; readonly parentId?: string | null | undefined },
-    ) {
-      const current = yield* requireTag(id)
-      const name = patch.name ?? current.name
-      const parentId =
-        patch.parentId === undefined
-          ? current.parentId
-          : asParentColumn(patch.parentId ?? undefined)
-      if (parentId === id) return yield* new TagConflict({ reason: "tag cannot parent itself" })
-      if (parentId !== rootParent) yield* requireTag(parentId)
-      if (parentId !== rootParent && (yield* wouldCycle(id, parentId))) {
-        return yield* new TagConflict({ reason: "tag cannot parent a descendant" })
-      }
-      yield* assertSiblingFree({ name, parentId, exceptId: id })
-      yield* db
-        .update(tags)
-        .set({ name, parentId })
-        .where(eq(tags.id, id))
-        .pipe(
-          Effect.catchIf(
-            isUniqueFail,
-            () => new TagConflict({ reason: "sibling name already exists" }),
-          ),
-        )
-      const updated = tagRow(id, name, parentId)
-      yield* bus.publish({ event: "tag.updated", data: { id: updated.id } })
-      return updated
-    }),
-    remove: Effect.fn("Tags.remove")(function* (id: string) {
-      const current = yield* requireTag(id)
-      yield* db
-        .transaction((tx) =>
-          Effect.gen(function* () {
-            yield* tx.update(tags).set({ parentId: current.parentId }).where(eq(tags.parentId, id))
-            yield* tx.delete(bookmarkTags).where(eq(bookmarkTags.tagId, id))
-            yield* tx.delete(tags).where(eq(tags.id, id))
-          }),
-        )
-        .pipe(
-          Effect.catchTag(
-            "SqlError",
-            (cause) => new EffectDrizzleQueryError({ query: "Tags.remove", params: [id], cause }),
-          ),
-        )
-      yield* bus.publish({ event: "tag.deleted", data: { id } })
+      const rows = yield* db
+        .select({ tag: bookmarkTags.tag, count: sql<number>`count(*)` })
+        .from(bookmarkTags)
+        .groupBy(bookmarkTags.tag)
+        .orderBy(bookmarkTags.tag)
+      return rows
     }),
     tagsFor: Effect.fn("Tags.tagsFor")(function* (bookmarkId: string) {
       const rows = yield* db
-        .select({ tagId: bookmarkTags.tagId })
+        .select({ tag: bookmarkTags.tag })
         .from(bookmarkTags)
         .where(eq(bookmarkTags.bookmarkId, bookmarkId))
-      return rows.map((row) => row.tagId)
+        .orderBy(bookmarkTags.tag)
+      return rows.map((row) => row.tag)
     }),
     replaceBookmarkTags: Effect.fn("Tags.replaceBookmarkTags")(function* (
       bookmarkId: string,
-      tagIds: ReadonlyArray<string>,
+      tags: ReadonlyArray<string>,
     ) {
       yield* requireBookmark(bookmarkId)
-      for (const tagId of tagIds) yield* requireTag(tagId)
-      const before = yield* db
-        .select({ tagId: bookmarkTags.tagId })
-        .from(bookmarkTags)
-        .where(eq(bookmarkTags.bookmarkId, bookmarkId))
+      const before = yield* linksFor(bookmarkId)
       yield* db
         .transaction((tx) =>
           Effect.gen(function* () {
             yield* tx.delete(bookmarkTags).where(eq(bookmarkTags.bookmarkId, bookmarkId))
-            if (tagIds.length === 0) return
-            yield* tx.insert(bookmarkTags).values(tagIds.map((tagId) => ({ bookmarkId, tagId })))
+            if (tags.length === 0) return
+            yield* tx.insert(bookmarkTags).values(tags.map((tag) => ({ bookmarkId, tag })))
           }),
         )
         .pipe(
-          Effect.catchTag(
-            "SqlError",
-            (cause) =>
-              new EffectDrizzleQueryError({
-                query: "Tags.replaceBookmarkTags",
-                params: [bookmarkId],
-                cause,
-              }),
+          Effect.catchTag("SqlError", (cause) =>
+            wrap("Tags.replaceBookmarkTags", [bookmarkId], cause),
           ),
         )
-      const after = new Set(tagIds)
+      const after = new Set(tags)
+      const beforeSet = new Set(before.map((row) => row.tag))
       for (const row of before) {
-        if (!after.has(row.tagId)) {
-          yield* bus.publish({
-            event: "bookmark.untagged",
-            data: { id: bookmarkId, tagId: row.tagId },
-          })
+        if (!after.has(row.tag)) {
+          yield* bus.publish({ event: "bookmark.untagged", data: { id: bookmarkId, tag: row.tag } })
         }
       }
-      const beforeSet = new Set(before.map((row) => row.tagId))
-      for (const tagId of tagIds) {
-        if (!beforeSet.has(tagId)) {
-          yield* bus.publish({ event: "bookmark.tagged", data: { id: bookmarkId, tagId } })
+      for (const tag of tags) {
+        if (!beforeSet.has(tag)) {
+          yield* bus.publish({ event: "bookmark.tagged", data: { id: bookmarkId, tag } })
         }
       }
     }),
-    addBookmarkTag: Effect.fn("Tags.addBookmarkTag")(function* (bookmarkId: string, tagId: string) {
+    addBookmarkTag: Effect.fn("Tags.addBookmarkTag")(function* (bookmarkId: string, tag: string) {
       yield* requireBookmark(bookmarkId)
-      yield* requireTag(tagId)
-      const existing = yield* db
-        .select({ tagId: bookmarkTags.tagId })
-        .from(bookmarkTags)
-        .where(and(eq(bookmarkTags.bookmarkId, bookmarkId), eq(bookmarkTags.tagId, tagId)))
-      if (existing[0] !== undefined) return
-      const added = yield* db
+      const inserted = yield* db
         .insert(bookmarkTags)
-        .values({ bookmarkId, tagId })
-        .pipe(
-          Effect.as(true),
-          Effect.catchIf(isUniqueFail, () => Effect.succeed(false)),
-        )
-      if (added) {
-        yield* bus.publish({ event: "bookmark.tagged", data: { id: bookmarkId, tagId } })
+        .values({ bookmarkId, tag })
+        .onConflictDoNothing()
+        .returning({ bookmarkId: bookmarkTags.bookmarkId })
+      if (inserted.length > 0) {
+        yield* bus.publish({ event: "bookmark.tagged", data: { id: bookmarkId, tag } })
       }
     }),
     removeBookmarkTag: Effect.fn("Tags.removeBookmarkTag")(function* (
       bookmarkId: string,
-      tagId: string,
+      tag: string,
     ) {
       yield* requireBookmark(bookmarkId)
-      yield* requireTag(tagId)
       const existing = yield* db
-        .select({ tagId: bookmarkTags.tagId })
+        .select({ tag: bookmarkTags.tag })
         .from(bookmarkTags)
-        .where(and(eq(bookmarkTags.bookmarkId, bookmarkId), eq(bookmarkTags.tagId, tagId)))
+        .where(and(eq(bookmarkTags.bookmarkId, bookmarkId), eq(bookmarkTags.tag, tag)))
       if (existing[0] === undefined) return
       yield* db
         .delete(bookmarkTags)
-        .where(and(eq(bookmarkTags.bookmarkId, bookmarkId), eq(bookmarkTags.tagId, tagId)))
-      yield* bus.publish({ event: "bookmark.untagged", data: { id: bookmarkId, tagId } })
+        .where(and(eq(bookmarkTags.bookmarkId, bookmarkId), eq(bookmarkTags.tag, tag)))
+      yield* bus.publish({ event: "bookmark.untagged", data: { id: bookmarkId, tag } })
+    }),
+    applyToMembers: Effect.fn("Tags.applyToMembers")(function* (
+      memberIds: ReadonlyArray<string>,
+      tag: string,
+    ) {
+      if (memberIds.length === 0) return { tagged: 0 }
+      const members = yield* db
+        .select({ id: bookmarks.id })
+        .from(bookmarks)
+        .where(inArray(bookmarks.id, [...memberIds]))
+      const found = new Set(members.map((row) => row.id))
+      const missing = memberIds.find((id) => !found.has(id))
+      if (missing !== undefined) return yield* new BookmarkNotFound({ id: missing })
+      const existing = yield* db
+        .select({ bookmarkId: bookmarkTags.bookmarkId })
+        .from(bookmarkTags)
+        .where(and(eq(bookmarkTags.tag, tag), inArray(bookmarkTags.bookmarkId, [...memberIds])))
+      const hasTag = new Set(existing.map((row) => row.bookmarkId))
+      const fresh = [...memberIds].filter((id) => !hasTag.has(id))
+      if (fresh.length === 0) return { tagged: 0 }
+      yield* db.insert(bookmarkTags).values(fresh.map((bookmarkId) => ({ bookmarkId, tag })))
+      for (const bookmarkId of fresh) {
+        yield* bus.publish({ event: "bookmark.tagged", data: { id: bookmarkId, tag } })
+      }
+      return { tagged: fresh.length }
+    }),
+    renameTag: Effect.fn("Tags.renameTag")(function* (from: string, to: string) {
+      const affected = yield* db
+        .select({ bookmarkId: bookmarkTags.bookmarkId })
+        .from(bookmarkTags)
+        .where(eq(bookmarkTags.tag, from))
+      if (affected.length === 0 || from === to) return { tag: to, count: 0 }
+      const ids = affected.map((row) => row.bookmarkId)
+      yield* db
+        .transaction((tx) =>
+          Effect.gen(function* () {
+            yield* tx
+              .delete(bookmarkTags)
+              .where(and(eq(bookmarkTags.tag, to), inArray(bookmarkTags.bookmarkId, ids)))
+            yield* tx.update(bookmarkTags).set({ tag: to }).where(eq(bookmarkTags.tag, from))
+          }),
+        )
+        .pipe(Effect.catchTag("SqlError", (cause) => wrap("Tags.renameTag", [from, to], cause)))
+      for (const bookmarkId of ids) {
+        yield* bus.publish({ event: "bookmark.untagged", data: { id: bookmarkId, tag: from } })
+        yield* bus.publish({ event: "bookmark.tagged", data: { id: bookmarkId, tag: to } })
+      }
+      return { tag: to, count: ids.length }
     }),
   }
 })

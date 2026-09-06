@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-09-04) — grilled with Erick. Amended 2026-09-05: UMAP (not PCA) for 2d; no auto-tag; canvas is the library view; no `minSize`; no coarse `bookmarks.changed`. See ADR 0014.
+Accepted (2026-09-04) — grilled with Erick. Amended 2026-09-05: UMAP (not PCA) for 2d; no auto-tag; canvas is the library view; no `minSize`; no coarse `bookmarks.changed`. Amended 2026-09-06: tags are flat strings, hierarchy and tag ids are gone — see ADR 0015.
 
 ## Context
 

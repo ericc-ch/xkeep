@@ -55,14 +55,14 @@ const listItem = (row: BookmarkListRow) => {
     text: row.text,
     timestamp: row.timestamp,
     mediaTypes: mediaTypesOf(row),
-    tagIds: row.tagIds,
+    tags: row.tags,
     ...(first === undefined ? {} : { still: mediaHref(first) }),
     embedded: row.embedded,
     ...(row.projX === undefined || row.projY === undefined ? {} : { x: row.projX, y: row.projY }),
   }
 }
 
-const detail = (row: BookmarkRow, tagIds: ReadonlyArray<string>) => {
+const detail = (row: BookmarkRow, tags: ReadonlyArray<string>) => {
   const quoted =
     row.quotedJson === undefined
       ? undefined
@@ -79,7 +79,7 @@ const detail = (row: BookmarkRow, tagIds: ReadonlyArray<string>) => {
     urls: decodeStrings(row.urlsJson),
     ...(quoted === undefined ? {} : { quoted }),
     stills: row.stillPaths.map(mediaHref),
-    tagIds,
+    tags,
     embedded: row.embedding !== undefined,
     ...(row.projX === undefined || row.projY === undefined ? {} : { x: row.projX, y: row.projY }),
   }
@@ -168,8 +168,8 @@ export const handlers = HttpApiBuilder.group(Api, "xkeep", (group) =>
           const tags = yield* Tags
           const row = yield* bookmarks.get(ctx.params.id)
           if (row === undefined) return yield* new BookmarkNotFound({ id: ctx.params.id })
-          const tagIds = yield* tags.tagsFor(ctx.params.id)
-          return detail(row, tagIds)
+          const tagNames = yield* tags.tagsFor(ctx.params.id)
+          return detail(row, tagNames)
         },
         Effect.catchTags({
           BookmarkNotFound: (error) => error,
@@ -210,44 +210,13 @@ export const handlers = HttpApiBuilder.group(Api, "xkeep", (group) =>
       ),
     )
     .handle(
-      "createTag",
-      Effect.fn("createTag")(
+      "renameTag",
+      Effect.fn("renameTag")(
         function* (ctx) {
           const tags = yield* Tags
-          return yield* tags.create(ctx.payload)
+          return yield* tags.renameTag(ctx.params.tag, ctx.payload.tag)
         },
-        Effect.catchTags({
-          TagConflict: (error) => error,
-          TagNotFound: (error) => error,
-          EffectDrizzleQueryError: () => new HttpApiError.InternalServerError(),
-        }),
-      ),
-    )
-    .handle(
-      "updateTag",
-      Effect.fn("updateTag")(
-        function* (ctx) {
-          const tags = yield* Tags
-          return yield* tags.update(ctx.params.id, ctx.payload)
-        },
-        Effect.catchTags({
-          TagConflict: (error) => error,
-          TagNotFound: (error) => error,
-          EffectDrizzleQueryError: () => new HttpApiError.InternalServerError(),
-        }),
-      ),
-    )
-    .handle(
-      "deleteTag",
-      Effect.fn("deleteTag")(
-        function* (ctx) {
-          const tags = yield* Tags
-          yield* tags.remove(ctx.params.id)
-        },
-        Effect.catchTags({
-          TagNotFound: (error) => error,
-          EffectDrizzleQueryError: () => new HttpApiError.InternalServerError(),
-        }),
+        Effect.catchTag("EffectDrizzleQueryError", () => new HttpApiError.InternalServerError()),
       ),
     )
     .handle(
@@ -255,12 +224,11 @@ export const handlers = HttpApiBuilder.group(Api, "xkeep", (group) =>
       Effect.fn("replaceBookmarkTags")(
         function* (ctx) {
           const tags = yield* Tags
-          yield* tags.replaceBookmarkTags(ctx.params.id, ctx.payload.tagIds)
-          return { tagIds: ctx.payload.tagIds }
+          yield* tags.replaceBookmarkTags(ctx.params.id, ctx.payload.tags)
+          return { tags: ctx.payload.tags }
         },
         Effect.catchTags({
           BookmarkNotFound: (error) => error,
-          TagNotFound: (error) => error,
           EffectDrizzleQueryError: () => new HttpApiError.InternalServerError(),
         }),
       ),
@@ -270,11 +238,10 @@ export const handlers = HttpApiBuilder.group(Api, "xkeep", (group) =>
       Effect.fn("addBookmarkTag")(
         function* (ctx) {
           const tags = yield* Tags
-          yield* tags.addBookmarkTag(ctx.params.id, ctx.params.tagId)
+          yield* tags.addBookmarkTag(ctx.params.id, ctx.params.tag)
         },
         Effect.catchTags({
           BookmarkNotFound: (error) => error,
-          TagNotFound: (error) => error,
           EffectDrizzleQueryError: () => new HttpApiError.InternalServerError(),
         }),
       ),
@@ -284,11 +251,23 @@ export const handlers = HttpApiBuilder.group(Api, "xkeep", (group) =>
       Effect.fn("removeBookmarkTag")(
         function* (ctx) {
           const tags = yield* Tags
-          yield* tags.removeBookmarkTag(ctx.params.id, ctx.params.tagId)
+          yield* tags.removeBookmarkTag(ctx.params.id, ctx.params.tag)
         },
         Effect.catchTags({
           BookmarkNotFound: (error) => error,
-          TagNotFound: (error) => error,
+          EffectDrizzleQueryError: () => new HttpApiError.InternalServerError(),
+        }),
+      ),
+    )
+    .handle(
+      "bulkApplyTag",
+      Effect.fn("bulkApplyTag")(
+        function* (ctx) {
+          const tags = yield* Tags
+          return yield* tags.applyToMembers(ctx.payload.memberIds, ctx.payload.tag)
+        },
+        Effect.catchTags({
+          BookmarkNotFound: (error) => error,
           EffectDrizzleQueryError: () => new HttpApiError.InternalServerError(),
         }),
       ),

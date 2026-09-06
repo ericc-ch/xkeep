@@ -226,7 +226,6 @@
       origFetch(`${ORIGIN}${path}`, { ...init, targetAddressSpace: "loopback" })
 
     const known = new Set()
-    let importWhenDone = false
     log(`Looking for xkeep at ${ORIGIN}`)
     try {
       const health = await xkeepFetch("/api/health")
@@ -242,9 +241,6 @@
             }
           }
           log(`xkeep is up. ${known.size} already saved.`)
-          importWhenDone = confirm(
-            "xkeep is running. Import when done? OK sends bookmarks to the app. Cancel downloads a file.",
-          )
         } else {
           log("xkeep did not answer. Will download a file.")
         }
@@ -319,24 +315,54 @@
       stopBtn.remove()
     }
 
+    const importViaPopup = (bookmarks) =>
+      new Promise((resolve) => {
+        log(`Opening xkeep for ${bookmarks.length} bookmarks…`)
+        const popup = window.open(`${ORIGIN}/import`, "xkeep-import", "width=480,height=360")
+        if (!popup) {
+          resolve(false)
+          return
+        }
+        let settled = false
+        const settle = (result) => {
+          if (settled) return
+          settled = true
+          clearTimeout(timeout)
+          window.removeEventListener("message", onMessage)
+          if (!result) popup.close()
+          resolve(result)
+        }
+        const onMessage = (event) => {
+          if (event.source !== popup || event.origin !== ORIGIN || event.data !== "xkeep:ready") {
+            return
+          }
+          try {
+            popup.postMessage({ bookmarks }, ORIGIN)
+            log(`Sent ${bookmarks.length} to xkeep — check the popup.`)
+            stopBtn.remove()
+            settle(true)
+          } catch {
+            settle(false)
+          }
+        }
+        window.addEventListener("message", onMessage)
+        const timeout = setTimeout(() => settle(false), 8000)
+      })
+
     const finish = async () => {
       unhook()
       const bookmarks = freshBookmarks()
-      if (importWhenDone) {
-        log(`Sending ${bookmarks.length} to xkeep…`)
-        try {
-          const response = await xkeepFetch("/api/imports", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ bookmarks }),
-          })
-          if (response.ok) {
-            log(`Imported ${bookmarks.length}.`)
-            stopBtn.remove()
-            return
-          }
-        } catch {}
-        log("Import failed. Downloading file.")
+      if (bookmarks.length === 0) {
+        log("No new bookmarks.")
+        stopBtn.remove()
+        return
+      }
+      const wantsImport = confirm(
+        `Import ${bookmarks.length} bookmarks to xkeep? OK opens the app. Cancel downloads a file.`,
+      )
+      if (wantsImport) {
+        if (await importViaPopup(bookmarks)) return
+        log("Popup did not become ready. Downloading file.")
       }
       download(bookmarks)
     }

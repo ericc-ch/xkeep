@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-09-05) — grilled with Erick. Amends ADR 0010 (events, open browser), ADR 0011 (projection, no auto-tag), and PLAN home-screen / auto-tag lines.
+Accepted (2026-09-05) — grilled with Erick. Amends ADR 0010 (events, open browser), ADR 0011 (projection, no auto-tag), and PLAN home-screen / auto-tag lines. Amended 2026-09-06: next cut (search, filters, clusters, detail card, auto-import) and bulk tag apply — see ADR 0015, 0016.
 
 ## Context
 

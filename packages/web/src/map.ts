@@ -20,6 +20,22 @@ const ZOOM_MAX = 64
 const GRID_WORLD = 24
 const GRID_DIV = 8
 
+const PLATE_FILL = 0x16171c
+const PLATE_LINE = 0x2a2c31
+const DIM_ALPHA = 0.12
+
+const hsl = (h: number, s: number, l: number): number => {
+  const a = s * Math.min(l, 1 - l)
+  const f = (n: number) => {
+    const k = (n + h / 30) % 12
+    const v = l - a * Math.max(-1, Math.min(k - 3, Math.min(9 - k, 1)))
+    return Math.round(255 * v)
+  }
+  return f(0) * 65536 + f(8) * 256 + f(4)
+}
+
+const groupColor = (group: number): number => hsl((group * 137.508) % 360, 0.45, 0.4)
+
 type Placed = {
   readonly item: PileItem
   readonly x: number
@@ -63,11 +79,11 @@ const sizeSprite = (sprite: Sprite, texture: Texture) => {
   }
 }
 
-const plate = (w: number, h: number) => {
+const plate = (w: number, h: number, fill: number) => {
   const g = new Graphics()
   g.rect(0, 0, w, h)
-  g.fill({ color: 0x16171c })
-  g.stroke({ color: 0x2a2c31, width: 1 })
+  g.fill({ color: fill })
+  g.stroke({ color: PLATE_LINE, width: 1 })
   return g
 }
 
@@ -107,6 +123,8 @@ type Mark = {
 export type MapHandle = {
   readonly sync: (items: ReadonlyArray<PileItem>) => void
   readonly setSpread: (spread: number) => void
+  readonly setHighlight: (ids: ReadonlySet<string> | undefined) => void
+  readonly setGroups: (groups: ReadonlyMap<string, number> | undefined) => void
   readonly destroy: () => void
   readonly screenOfId: (id: string) => { x: number; y: number } | undefined
 }
@@ -131,6 +149,8 @@ export const createMap = (
   let spread = Math.min(SPREAD_MAX, Math.max(SPREAD_MIN, input.spread ?? SPREAD_DEFAULT))
   let lastItems: ReadonlyArray<PileItem> = []
   let drag: { readonly x: number; readonly y: number; moved: boolean } | undefined
+  let highlight: ReadonlySet<string> | undefined
+  let groups: ReadonlyMap<string, number> | undefined
 
   const screenOf = (worldX: number, worldY: number) => ({
     x: world.x + worldX * world.scale.x,
@@ -142,6 +162,21 @@ export const createMap = (
   const applySizes = () => {
     const local = markScale()
     for (const mark of marks.values()) mark.root.scale.set(local)
+  }
+
+  const paintBacking = (mark: Mark) => {
+    const w = (mark.sprite?.width ?? MARK_LONG) + PAD * 2
+    const h = (mark.sprite?.height ?? MARK_LONG * 0.62) + PAD * 2
+    const group = groups?.get(mark.item.id)
+    mark.backing.clear()
+    mark.backing.rect(0, 0, w, h)
+    mark.backing.fill({ color: group === undefined ? PLATE_FILL : groupColor(group) })
+    mark.backing.stroke({ color: PLATE_LINE, width: 1 })
+    mark.root.pivot.set(w / 2, h / 2)
+  }
+
+  const applyMarkState = (mark: Mark) => {
+    mark.root.alpha = highlight !== undefined && !highlight.has(mark.item.id) ? DIM_ALPHA : 1
   }
 
   const loadTexture = async (url: string): Promise<Texture | undefined> => {
@@ -176,13 +211,7 @@ export const createMap = (
     sizeSprite(mark.sprite, texture)
     mark.sprite.x = PAD
     mark.sprite.y = PAD
-    const w = mark.sprite.width + PAD * 2
-    const h = mark.sprite.height + PAD * 2
-    mark.backing.clear()
-    mark.backing.rect(0, 0, w, h)
-    mark.backing.fill({ color: 0x16171c })
-    mark.backing.stroke({ color: 0x2a2c31, width: 1 })
-    mark.root.pivot.set(w / 2, h / 2)
+    paintBacking(mark)
     mark.root.scale.set(markScale())
   }
 
@@ -193,7 +222,7 @@ export const createMap = (
     root.x = placed.x
     root.y = placed.y
     root.scale.set(markScale())
-    const backing = plate(MARK_LONG + PAD * 2, MARK_LONG * 0.62 + PAD * 2)
+    const backing = plate(MARK_LONG + PAD * 2, MARK_LONG * 0.62 + PAD * 2, PLATE_FILL)
     root.addChild(backing)
     const mark: Mark = {
       item: placed.item,
@@ -210,6 +239,8 @@ export const createMap = (
     })
     world.addChild(root)
     marks.set(placed.item.id, mark)
+    paintBacking(mark)
+    applyMarkState(mark)
     void paintMark(mark)
   }
 
@@ -247,6 +278,7 @@ export const createMap = (
         existing.root.x = node.x
         existing.root.y = node.y
       }
+      applyMarkState(existing)
       if (existing.sprite === undefined) void paintMark(existing)
     }
     for (const [id, mark] of marks) {
@@ -337,6 +369,16 @@ export const createMap = (
       drawGrid(grid, spread)
       sync(lastItems)
       input.onView()
+    },
+    setHighlight: (ids) => {
+      if (destroyed) return
+      highlight = ids
+      for (const mark of marks.values()) applyMarkState(mark)
+    },
+    setGroups: (map) => {
+      if (destroyed) return
+      groups = map
+      for (const mark of marks.values()) paintBacking(mark)
     },
     destroy: () => {
       destroyed = true

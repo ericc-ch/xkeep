@@ -59,30 +59,32 @@ export const SearchResult = Schema.Struct({
   hits: Schema.Array(SearchHit),
 })
 
-export const TagId = Schema.String.check(Schema.isNonEmpty())
+export const TagName = Schema.String.check(Schema.isNonEmpty())
 
-export const Tag = Schema.Struct({
-  id: TagId,
-  name: Schema.String.check(Schema.isNonEmpty()),
-  parentId: Schema.optionalKey(TagId),
+export const TagCount = Schema.Struct({
+  tag: TagName,
+  count: Schema.Number,
 })
 
-export const TagList = Schema.Struct({
-  tags: Schema.Array(Tag),
+export const TagCounts = Schema.Struct({
+  tags: Schema.Array(TagCount),
 })
 
-export const TagCreate = Schema.Struct({
-  name: Schema.String.check(Schema.isNonEmpty()),
-  parentId: Schema.optionalKey(TagId),
+export const TagRename = Schema.Struct({
+  tag: TagName,
 })
 
-export const TagPatch = Schema.Struct({
-  name: Schema.optionalKey(Schema.String.check(Schema.isNonEmpty())),
-  parentId: Schema.optionalKey(Schema.NullOr(TagId)),
+export const BookmarkTags = Schema.Struct({
+  tags: Schema.Array(TagName).check(Schema.isUnique()),
 })
 
-export const BookmarkTagIds = Schema.Struct({
-  tagIds: Schema.Array(TagId).check(Schema.isUnique()),
+export const BulkTagApply = Schema.Struct({
+  memberIds: Schema.Array(Schema.String).check(Schema.isUnique()),
+  tag: TagName,
+})
+
+export const BulkTagResult = Schema.Struct({
+  tagged: Schema.Number,
 })
 
 const MediaType = Schema.Literals(["text", "photo", "video", "gif", "link"])
@@ -95,7 +97,7 @@ export const BookmarkListItem = Schema.Struct({
   text: Schema.String,
   timestamp: Schema.String,
   mediaTypes: Schema.Array(MediaType),
-  tagIds: Schema.Array(TagId),
+  tags: Schema.Array(TagName),
   still: Schema.optionalKey(Schema.String),
   embedded: Schema.Boolean,
   x: Schema.optionalKey(Schema.Number),
@@ -118,7 +120,7 @@ export const BookmarkDetail = Schema.Struct({
   urls: Schema.Array(Schema.String),
   quoted: Schema.optionalKey(BookmarkCodec),
   stills: Schema.Array(Schema.String),
-  tagIds: Schema.Array(TagId),
+  tags: Schema.Array(TagName),
   embedded: Schema.Boolean,
   x: Schema.optionalKey(Schema.Number),
   y: Schema.optionalKey(Schema.Number),
@@ -145,28 +147,13 @@ const sseEvent = <Name extends string, Data extends Schema.Top>(name: Name, data
 export const SseEvent = Schema.Union([
   sseEvent("server.connected", Schema.Struct({})),
   sseEvent("heartbeat", Schema.Struct({})),
-  sseEvent("tag.created", Schema.Struct({ id: TagId })),
-  sseEvent("tag.updated", Schema.Struct({ id: TagId })),
-  sseEvent("tag.deleted", Schema.Struct({ id: TagId })),
-  sseEvent("bookmark.tagged", Schema.Struct({ id: Schema.String, tagId: TagId })),
-  sseEvent("bookmark.untagged", Schema.Struct({ id: Schema.String, tagId: TagId })),
+  sseEvent("bookmark.tagged", Schema.Struct({ id: Schema.String, tag: TagName })),
+  sseEvent("bookmark.untagged", Schema.Struct({ id: Schema.String, tag: TagName })),
   sseEvent("bookmark.upserted", Schema.Struct({ ids: Schema.Array(Schema.String) })),
   sseEvent("bookmark.embedded", Schema.Struct({ ids: Schema.Array(Schema.String) })),
 ])
 
 export type SseEvent = typeof SseEvent.Type
-
-export class TagConflict extends Schema.TaggedError<TagConflict>()(
-  "TagConflict",
-  { reason: Schema.String },
-  { httpApiStatus: 409 },
-) {}
-
-export class TagNotFound extends Schema.TaggedError<TagNotFound>()(
-  "TagNotFound",
-  { id: Schema.String },
-  { httpApiStatus: 404 },
-) {}
 
 export class BookmarkNotFound extends Schema.TaggedError<BookmarkNotFound>()(
   "BookmarkNotFound",

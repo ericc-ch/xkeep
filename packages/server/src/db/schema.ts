@@ -1,4 +1,4 @@
-import { blob, primaryKey, real, sqliteTable, text, unique } from "drizzle-orm/sqlite-core"
+import { blob, primaryKey, real, sqliteTable, text } from "drizzle-orm/sqlite-core"
 
 export const bookmarks = sqliteTable("bookmarks", {
   id: text("id").primaryKey(),
@@ -17,21 +17,11 @@ export const bookmarks = sqliteTable("bookmarks", {
   projY: real("proj_y"),
 })
 
-export const tags = sqliteTable(
-  "tags",
-  {
-    id: text("id").primaryKey(),
-    name: text("name").notNull(),
-    parentId: text("parent_id").notNull().default(""),
-  },
-  (table) => [unique("tags_sibling_name").on(table.parentId, table.name)],
-)
-
 export const bookmarkTags = sqliteTable(
   "bookmark_tags",
   {
     bookmarkId: text("bookmark_id").notNull(),
-    tagId: text("tag_id").notNull(),
+    tag: text("tag").notNull(),
   },
-  (table) => [primaryKey({ columns: [table.bookmarkId, table.tagId] })],
+  (table) => [primaryKey({ columns: [table.bookmarkId, table.tag] })],
 )

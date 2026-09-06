@@ -206,40 +206,45 @@ describe.sequential("HttpApi", () => {
     )
   }, 30_000)
 
-  it("rejects duplicate root tag names and tag cycles", async () => {
-    resetDataDir()
-    await run(
-      Effect.gen(function* () {
-        const client = yield* HttpApiTest.groups(Api, ["xkeep"])
-        const parent = yield* client.createTag({ payload: { name: "gpu" } })
-        const clash = yield* client.createTag({ payload: { name: "gpu" } }).pipe(Effect.exit)
-        expect(clash._tag).toBe("Failure")
-        const child = yield* client.createTag({ payload: { name: "kernels", parentId: parent.id } })
-        const cycle = yield* client
-          .updateTag({ params: { id: parent.id }, payload: { parentId: child.id } })
-          .pipe(Effect.exit)
-        expect(cycle._tag).toBe("Failure")
-        yield* client.deleteTag({ params: { id: parent.id } })
-        const listed = yield* client.listTags()
-        expect(listed.tags).toHaveLength(1)
-        expect(listed.tags[0]?.id).toBe(child.id)
-        expect(listed.tags[0]?.parentId).toBeUndefined()
-      }),
-    )
-  }, 30_000)
-
-  it("PUT /api/bookmarks/:id/tags rejects duplicate ids", async () => {
+  it("string tags list with counts, apply with spaces, and rename merges", async () => {
     resetDataDir()
     await run(
       Effect.gen(function* () {
         const client = yield* HttpApiTest.groups(Api, ["xkeep"])
         yield* client.importDump({ payload: dump })
         yield* waitUntilImportIdle(client)
-        const tag = yield* client.createTag({ payload: { name: "gpu" } })
+        yield* client.addBookmarkTag({ params: { id: canaryId, tag: "gpu" } })
+        yield* client.addBookmarkTag({ params: { id: canaryId, tag: "machine learning" } })
+        yield* client.addBookmarkTag({ params: { id: canaryId, tag: "gpu" } })
+        const listed = yield* client.listTags()
+        expect(listed.tags).toEqual([
+          { tag: "gpu", count: 1 },
+          { tag: "machine learning", count: 1 },
+        ])
+        const renamed = yield* client.renameTag({ params: { tag: "gpu" }, payload: { tag: "ml" } })
+        expect(renamed).toEqual({ tag: "ml", count: 1 })
+        const after = yield* client.listTags()
+        expect(after.tags).toEqual([
+          { tag: "machine learning", count: 1 },
+          { tag: "ml", count: 1 },
+        ])
+        const one = yield* client.getBookmark({ params: { id: canaryId } })
+        expect(one.tags).toEqual(["machine learning", "ml"])
+      }),
+    )
+  }, 30_000)
+
+  it("PUT /api/bookmarks/:id/tags rejects duplicate tags", async () => {
+    resetDataDir()
+    await run(
+      Effect.gen(function* () {
+        const client = yield* HttpApiTest.groups(Api, ["xkeep"])
+        yield* client.importDump({ payload: dump })
+        yield* waitUntilImportIdle(client)
         const dup = yield* client
           .replaceBookmarkTags({
             params: { id: canaryId },
-            payload: { tagIds: [tag.id, tag.id] },
+            payload: { tags: ["gpu", "gpu"] },
           })
           .pipe(Effect.exit)
         expect(dup._tag).toBe("Failure")
@@ -247,7 +252,7 @@ describe.sequential("HttpApi", () => {
     )
   }, 30_000)
 
-  it("tags apply and cluster after embed", async () => {
+  it("tags apply, bulk-apply, and cluster after embed", async () => {
     resetDataDir()
     await run(
       Effect.gen(function* () {
@@ -255,17 +260,31 @@ describe.sequential("HttpApi", () => {
         yield* client.importDump({ payload: dump })
         yield* waitUntilImportIdle(client)
         yield* waitUntilEmbedded(client)
-        const tag = yield* client.createTag({ payload: { name: "gpu" } })
-        yield* client.addBookmarkTag({ params: { id: canaryId, tagId: tag.id } })
+        yield* client.addBookmarkTag({ params: { id: canaryId, tag: "gpu" } })
         const one = yield* client.getBookmark({ params: { id: canaryId } })
-        expect(one.tagIds).toEqual([tag.id])
+        expect(one.tags).toEqual(["gpu"])
+        const first = yield* client.bulkApplyTag({
+          payload: { memberIds: [canaryId], tag: "bulk" },
+        })
+        expect(first).toEqual({ tagged: 1 })
+        const second = yield* client.bulkApplyTag({
+          payload: { memberIds: [canaryId], tag: "bulk" },
+        })
+        expect(second).toEqual({ tagged: 0 })
+        const replace = yield* client.replaceBookmarkTags({
+          params: { id: canaryId },
+          payload: { tags: [] },
+        })
+        expect(replace).toEqual({ tags: [] })
+        const cleared = yield* client.getBookmark({ params: { id: canaryId } })
+        expect(cleared.tags).toEqual([])
         const clustered = yield* client.cluster({ query: {} })
         expect(clustered.skippedUnembedded).toBe(0)
         expect(clustered.members).toHaveLength(1)
         expect(clustered.members[0]?.id).toBe(canaryId)
         const listed = yield* client.listBookmarks()
         expect(listed.bookmarks[0]?.x).toBeTypeOf("number")
-        expect(listed.bookmarks[0]?.tagIds).toEqual([tag.id])
+        expect(listed.bookmarks[0]?.tags).toEqual([])
       }),
     )
   }, 30_000)

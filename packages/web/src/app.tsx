@@ -1,4 +1,5 @@
 import { Outlet, createRootRoute, createRoute, createRouter } from "@tanstack/solid-router"
+import { Import } from "./import.tsx"
 import { Library } from "./library.tsx"
 
 const rootRoute = createRootRoute({
@@ -11,7 +12,13 @@ const indexRoute = createRoute({
   component: Library,
 })
 
-const routeTree = rootRoute.addChildren([indexRoute])
+const importRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/import",
+  component: Import,
+})
+
+const routeTree = rootRoute.addChildren([indexRoute, importRoute])
 
 export const router = createRouter({
   routeTree,

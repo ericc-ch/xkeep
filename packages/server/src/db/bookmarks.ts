@@ -26,7 +26,7 @@ export type BookmarkRow = {
 
 export type BookmarkListRow = Omit<BookmarkRow, "embedding"> & {
   readonly embedded: boolean
-  readonly tagIds: ReadonlyArray<string>
+  readonly tags: ReadonlyArray<string>
 }
 
 const stillPathsJson = (paths: ReadonlyArray<string>): string | null =>
@@ -242,7 +242,7 @@ const make = Effect.gen(function* () {
       const tagsByBookmark = new Map<string, Array<string>>()
       for (const link of links) {
         const current = tagsByBookmark.get(link.bookmarkId) ?? []
-        current.push(link.tagId)
+        current.push(link.tag)
         tagsByBookmark.set(link.bookmarkId, current)
       }
       return rows.map((row) => ({
@@ -261,7 +261,7 @@ const make = Effect.gen(function* () {
         projX: row.projX ?? undefined,
         projY: row.projY ?? undefined,
         embedded: row.embedded === 1,
-        tagIds: tagsByBookmark.get(row.id) ?? [],
+        tags: tagsByBookmark.get(row.id) ?? [],
       }))
     }),
   }

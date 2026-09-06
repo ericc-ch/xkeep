@@ -13,7 +13,9 @@ import {
   BookmarkDump,
   BookmarkList,
   BookmarkNotFound,
-  BookmarkTagIds,
+  BookmarkTags,
+  BulkTagApply,
+  BulkTagResult,
   ClusterK,
   ClusterResult,
   Health,
@@ -23,12 +25,9 @@ import {
   MediaNotFound,
   SearchResult,
   SseEvent,
-  Tag,
-  TagConflict,
-  TagCreate,
-  TagNotFound,
-  TagList,
-  TagPatch,
+  TagCount,
+  TagCounts,
+  TagRename,
 } from "./schema.ts"
 
 export const Api = HttpApi.make("xkeep")
@@ -86,52 +85,45 @@ export const Api = HttpApi.make("xkeep")
       )
       .add(
         HttpApiEndpoint.get("listTags", "/tags", {
-          success: TagList,
+          success: TagCounts,
           error: HttpApiError.InternalServerError,
         }),
       )
       .add(
-        HttpApiEndpoint.post("createTag", "/tags", {
-          payload: TagCreate,
-          success: Tag,
-          error: [TagConflict, TagNotFound, HttpApiError.InternalServerError],
-        }),
-      )
-      .add(
-        HttpApiEndpoint.patch("updateTag", "/tags/:id", {
-          params: { id: Schema.String },
-          payload: TagPatch,
-          success: Tag,
-          error: [TagConflict, TagNotFound, HttpApiError.InternalServerError],
-        }),
-      )
-      .add(
-        HttpApiEndpoint.delete("deleteTag", "/tags/:id", {
-          params: { id: Schema.String },
-          success: Schema.Void,
-          error: [TagNotFound, HttpApiError.InternalServerError],
+        HttpApiEndpoint.put("renameTag", "/tags/:tag", {
+          params: { tag: Schema.String },
+          payload: TagRename,
+          success: TagCount,
+          error: HttpApiError.InternalServerError,
         }),
       )
       .add(
         HttpApiEndpoint.put("replaceBookmarkTags", "/bookmarks/:id/tags", {
           params: { id: Schema.String },
-          payload: BookmarkTagIds,
-          success: BookmarkTagIds,
-          error: [BookmarkNotFound, TagNotFound, HttpApiError.InternalServerError],
+          payload: BookmarkTags,
+          success: BookmarkTags,
+          error: [BookmarkNotFound, HttpApiError.InternalServerError],
         }),
       )
       .add(
-        HttpApiEndpoint.post("addBookmarkTag", "/bookmarks/:id/tags/:tagId", {
-          params: { id: Schema.String, tagId: Schema.String },
+        HttpApiEndpoint.post("addBookmarkTag", "/bookmarks/:id/tags/:tag", {
+          params: { id: Schema.String, tag: Schema.String },
           success: Schema.Void,
-          error: [BookmarkNotFound, TagNotFound, HttpApiError.InternalServerError],
+          error: [BookmarkNotFound, HttpApiError.InternalServerError],
         }),
       )
       .add(
-        HttpApiEndpoint.delete("removeBookmarkTag", "/bookmarks/:id/tags/:tagId", {
-          params: { id: Schema.String, tagId: Schema.String },
+        HttpApiEndpoint.delete("removeBookmarkTag", "/bookmarks/:id/tags/:tag", {
+          params: { id: Schema.String, tag: Schema.String },
           success: Schema.Void,
-          error: [BookmarkNotFound, TagNotFound, HttpApiError.InternalServerError],
+          error: [BookmarkNotFound, HttpApiError.InternalServerError],
+        }),
+      )
+      .add(
+        HttpApiEndpoint.post("bulkApplyTag", "/bookmarks/tags", {
+          payload: BulkTagApply,
+          success: BulkTagResult,
+          error: [BookmarkNotFound, HttpApiError.InternalServerError],
         }),
       )
       .add(

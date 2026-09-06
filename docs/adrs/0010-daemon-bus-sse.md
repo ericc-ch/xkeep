@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-09-04); amended same day after grilling (bins, auth, events, bare command); amended 2026-09-04 (`service.json` is CLI-owned, ADR 0012); amended 2026-09-05 (fine bookmark ids, open the origin — ADR 0014); amended 2026-09-05 (default listen `5337`). Ship slices below are done.
+Accepted (2026-09-04); amended same day after grilling (bins, auth, events, bare command); amended 2026-09-04 (`service.json` is CLI-owned, ADR 0012); amended 2026-09-05 (fine bookmark ids, open the origin — ADR 0014); amended 2026-09-05 (default listen `5337`); amended 2026-09-06 (`tag.*` events dropped — ADR 0015). Ship slices below are done.
 
 ## Context
 
