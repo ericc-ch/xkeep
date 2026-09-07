@@ -4,15 +4,32 @@
 
 Local X bookmarks app. Intake is a JSON bookmark export. No paid X API. No Chrome extension in v1. The pile is bookmarks; the process is the daemon.
 
+### Product intent (2026-09-07 UI grilling)
+
+"Do not lose a bookmark" means preventing a valuable bookmark from becoming buried and forgotten in a very large collection. The primary guarantee is rediscovery, not merely durable storage. The audience is technical power users. Rediscovery is the primary job and organization is secondary. The app is a canvas; "library" is not a user-facing product term. The canvas keeps the current automatic semantic layout: related bookmarks sit near each other, with no manual placement. xkeep does not proactively recommend or resurface bookmarks; discovery comes from seeing, moving through, filtering, and searching the canvas. Interaction is Figma-like direct manipulation: select marks individually or with a marquee, extend/reduce the selection, open one mark for detail, and delete the selection. There is no Keep action, review state, queue, or resurfacing mode. Deletion opens the selected posts on X for user-assisted unbookmarking, then permanently removes them locally; xkeep does not claim to automate the upstream action. Design for 5,000–25,000 bookmarks. The product may add carefully chosen storage and API capabilities beyond the current backend, but this is a buildable near-term product rather than an unconstrained long-term concept.
+
+Canvas marks remain readable when zoomed out rather than collapsing into dots or aggregate bubbles. They may overlap; hover and selection raise a mark above its neighbors. At normal zoom, marks use one adaptive card system: media bookmarks are image-dominant cards with a compact author/text footer, while text-only bookmarks are compact post cards. Both share one footprint and selection language. Opening one bookmark uses a stable right-side inspector for the complete post, media, quote, links, tags, Open on X, and Delete.
+
+When marks overlap, a normal click selects the top mark and Cmd/Ctrl-click cycles through every mark under the pointer. Permanent deletion retains only a tombstone (`bookmarkId`, deletion timestamp) so importing an older dump cannot resurrect deliberately deleted content; the bookmark row, tags, embeddings, and owned media are removed.
+
+Search and filters operate directly on the canvas: matches remain bright while nonmatches dim without disappearing or moving. One compact floating top bar contains search plus filter and cluster controls. Tags stay off marks by default and can be shown as an optional color overlay. K-means groups are likewise an optional "Color by cluster" overlay rather than a primary mode or destination.
+
+Single selection immediately populates the right inspector. Multi-selection turns the inspector into Figma-like shared controls: count, common and mixed tag states, bulk tag edits, and Delete. Secondary actions such as Copy links and Export live in a menu. User-assisted deletion opens selected posts on X one at a time; after the user confirms an item was unbookmarked, xkeep permanently removes its local record and advances to the next selected item.
+
+The canvas restores its last camera position and zoom on launch. An always-visible minimap provides orientation across the full semantic space. Bookmark JSON can be dropped anywhere on the canvas or chosen through an Import action in the app menu. Import and embedding work appears in a compact status pill that expands for detail; errors remain visible until handled.
+
+Visual direction follows the current **X/Twitter dark design language**: a near-black canvas and panels, thin charcoal dividers, off-white primary text, muted gray metadata, round avatars, compact tweet-native typography, outline icons, and restrained Twitter-blue accents. Keep xkeep's full-window canvas composition; do not copy X's feed columns, navigation, trends, or other product structure. The overall feel is a dense, precise professional canvas tool rather than a dashboard or social feed.
+
 ## Terms
 
-| Term     | Meaning                                                                                          |
-| -------- | ------------------------------------------------------------------------------------------------ |
-| bookmark | One saved X post. The only pile.                                                                 |
-| tag      | Plain string label on a bookmark. No ids, no hierarchy.                                          |
-| cluster  | Ephemeral query result over embeddings — not stored.                                             |
-| canvas   | Library view at `/`. Spatial map of every bookmark (thumb or trimmed text). Not a sqlite entity. |
-| daemon   | Long-lived `xkeep` server process on loopback.                                                   |
+| Term     | Meaning                                                                                    |
+| -------- | ------------------------------------------------------------------------------------------ |
+| bookmark | One saved X post. The only pile.                                                           |
+| tag      | Plain string label on a bookmark. No ids, no hierarchy.                                    |
+| cluster  | Ephemeral query result over embeddings — not stored.                                       |
+| canvas   | Primary spatial view at `/`, containing every bookmark as a mark. Not a sqlite entity.     |
+| daemon   | Long-lived `xkeep` server process on loopback.                                             |
+| gem      | A bookmark with high future value that risks being buried and forgotten in the collection. |
 
 ## Dump
 

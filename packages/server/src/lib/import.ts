@@ -99,6 +99,7 @@ const downloadStill = Effect.fn("downloadStill")(function* (url: string, dest: s
 
 const fillStills = Effect.fn("fillStills")(function* (bookmarksIn: ReadonlyArray<Bookmark>) {
   const config = yield* AppConfig
+  const fs = yield* FileSystem.FileSystem
   const pathMod = yield* Path.Path
   const bookmarks = yield* Bookmarks
   let stills = 0
@@ -127,8 +128,14 @@ const fillStills = Effect.fn("fillStills")(function* (bookmarksIn: ReadonlyArray
       }
     }
     if (stillPaths.length > 0) {
-      yield* bookmarks.upsert(bookmark, stillPaths)
-      filled.push(bookmark.id)
+      const outcome = yield* bookmarks.upsert(bookmark, stillPaths)
+      if (outcome === "skippedDeleted") {
+        for (const stillPath of stillPaths) {
+          yield* fs.remove(stillPath, { force: true })
+        }
+      } else {
+        filled.push(bookmark.id)
+      }
     }
   }
   if (filled.length > 0) {
@@ -143,41 +150,60 @@ const fillStills = Effect.fn("fillStills")(function* (bookmarksIn: ReadonlyArray
 export const importDump = Effect.fn("importDump")(function* (dump: BookmarkDump) {
   const gate = yield* Import
   const bookmarks = yield* Bookmarks
+  const bus = yield* Bus
   yield* gate.begin()
+  yield* bus.publish({ event: "import.status", data: { status: "running" } })
   yield* Effect.log(`import start bookmarks=${String(dump.bookmarks.length)}`)
   const result = yield* Effect.gen(function* () {
     let imported = 0
     let updated = 0
+    let skippedDeleted = 0
     let stillsPending = 0
     const ids: Array<string> = []
+    const accepted: Array<Bookmark> = []
     for (const bookmark of dump.bookmarks) {
-      stillsPending += stillUrls(bookmark).length
       const outcome = yield* bookmarks.upsert(bookmark, [])
+      if (outcome === "skippedDeleted") {
+        skippedDeleted += 1
+        continue
+      }
+      accepted.push(bookmark)
+      stillsPending += stillUrls(bookmark).length
       ids.push(bookmark.id)
       if (outcome === "inserted") imported += 1
       else updated += 1
     }
-    const bus = yield* Bus
     if (ids.length > 0) {
       yield* bus.publish({ event: "bookmark.upserted", data: { ids } })
     }
     const missing = yield* bookmarks.missingEmbeddings()
     yield* Effect.forkDetach(
-      fillStills(dump.bookmarks).pipe(
+      fillStills(accepted).pipe(
         Effect.catchCause((cause) => Effect.logError(cause)),
-        Effect.ensuring(gate.end()),
+        Effect.ensuring(
+          gate.end().pipe(
+            Effect.andThen(bus.publish({ event: "import.status", data: { status: "idle" } })),
+          ),
+        ),
       ),
       { startImmediately: true },
     )
     yield* Effect.log(
-      `import rows written imported=${String(imported)} updated=${String(updated)} stillsPending=${String(stillsPending)} pendingEmbeddings=${String(missing.length)}`,
+      `import rows written imported=${String(imported)} updated=${String(updated)} skippedDeleted=${String(skippedDeleted)} stillsPending=${String(stillsPending)} pendingEmbeddings=${String(missing.length)}`,
     )
     return {
       imported,
       updated,
+      skippedDeleted,
       stillsPending,
       pendingEmbeddings: missing.length,
     }
-  }).pipe(Effect.tapError(() => gate.end()))
+  }).pipe(
+    Effect.tapError(() =>
+      gate.end().pipe(
+        Effect.andThen(bus.publish({ event: "import.status", data: { status: "idle" } })),
+      ),
+    ),
+  )
   return result
 })

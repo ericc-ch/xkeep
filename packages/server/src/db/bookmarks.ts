@@ -1,11 +1,12 @@
-import { count, eq, isNotNull, isNull, sql } from "drizzle-orm"
+import { count, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm"
 import { EffectDrizzleQueryError } from "drizzle-orm/effect-core/errors"
 import * as SQLiteNodeDrizzle from "drizzle-orm/effect-sqlite-node"
 import { Context, Data, Effect, Layer } from "effect"
 import { EMBED_DIMS } from "../config.ts"
+import { BookmarkNotFound } from "../http/schema.ts"
 import type { Bookmark } from "../schema.ts"
 import { sqliteLayer } from "./db.ts"
-import { bookmarkTags, bookmarks } from "./schema.ts"
+import { bookmarkTags, bookmarks, deletedBookmarks } from "./schema.ts"
 
 export type BookmarkRow = {
   readonly id: string
@@ -31,6 +32,14 @@ export type BookmarkListRow = Omit<BookmarkRow, "embedding"> & {
 
 const stillPathsJson = (paths: ReadonlyArray<string>): string | null =>
   paths.length === 0 ? null : JSON.stringify(paths)
+
+const chunks = <A>(values: ReadonlyArray<A>, size = 400): ReadonlyArray<ReadonlyArray<A>> => {
+  const result: Array<ReadonlyArray<A>> = []
+  for (let index = 0; index < values.length; index += size) {
+    result.push(values.slice(index, index + size))
+  }
+  return result
+}
 
 export const embeddingVector = (bytes: Uint8Array): Float32Array | undefined => {
   if (bytes.byteLength !== EMBED_DIMS * 4) return undefined
@@ -82,6 +91,8 @@ export class EmbeddingDimsError extends Data.TaggedError("EmbeddingDimsError")<{
 
 const make = Effect.gen(function* () {
   const db = yield* SQLiteNodeDrizzle.makeWithDefaults()
+  const wrap = (query: string, params: ReadonlyArray<string>, cause: unknown) =>
+    new EffectDrizzleQueryError({ query, params: [...params], cause })
   return {
     counts: Effect.fn("bookmarks.counts")(function* () {
       const nBookmarks = yield* db.$count(bookmarks)
@@ -92,45 +103,102 @@ const make = Effect.gen(function* () {
       bookmark: Bookmark,
       stillPaths: ReadonlyArray<string>,
     ) {
-      const existing = yield* db
-        .select({ n: count() })
-        .from(bookmarks)
-        .where(eq(bookmarks.id, bookmark.id))
-      const existed = existing[0]?.n ?? 0
-      yield* db
-        .insert(bookmarks)
-        .values({
-          id: bookmark.id,
-          author: bookmark.author,
-          handle: bookmark.handle,
-          avatar: bookmark.avatar,
-          text: bookmark.text,
-          timestamp: bookmark.timestamp,
-          mediaJson: JSON.stringify(bookmark.media),
-          hashtagsJson: JSON.stringify(bookmark.hashtags),
-          urlsJson: JSON.stringify(bookmark.urls),
-          quotedJson: bookmark.quoted === undefined ? null : JSON.stringify(bookmark.quoted),
-          stillPaths: stillPathsJson(stillPaths),
-        })
-        .onConflictDoUpdate({
-          target: bookmarks.id,
-          set: {
-            author: sql`excluded.author`,
-            handle: sql`excluded.handle`,
-            avatar: sql`excluded.avatar`,
-            text: sql`excluded.text`,
-            timestamp: sql`excluded.timestamp`,
-            mediaJson: sql`excluded.media_json`,
-            hashtagsJson: sql`excluded.hashtags_json`,
-            urlsJson: sql`excluded.urls_json`,
-            quotedJson: sql`excluded.quoted_json`,
-            stillPaths: sql`COALESCE(excluded.still_paths, ${bookmarks.stillPaths})`,
-            embedding: keepIfUnchanged(bookmarks.embedding),
-            projX: keepIfUnchanged(bookmarks.projX),
-            projY: keepIfUnchanged(bookmarks.projY),
-          },
-        })
-      return existed > 0 ? ("updated" as const) : ("inserted" as const)
+      return yield* db
+        .transaction((tx) =>
+          Effect.gen(function* () {
+            const tombstone = yield* tx
+              .select({ id: deletedBookmarks.bookmarkId })
+              .from(deletedBookmarks)
+              .where(eq(deletedBookmarks.bookmarkId, bookmark.id))
+            if (tombstone[0] !== undefined) return "skippedDeleted" as const
+            const existing = yield* tx
+              .select({ n: count() })
+              .from(bookmarks)
+              .where(eq(bookmarks.id, bookmark.id))
+            const existed = existing[0]?.n ?? 0
+            yield* tx
+              .insert(bookmarks)
+              .values({
+                id: bookmark.id,
+                author: bookmark.author,
+                handle: bookmark.handle,
+                avatar: bookmark.avatar,
+                text: bookmark.text,
+                timestamp: bookmark.timestamp,
+                mediaJson: JSON.stringify(bookmark.media),
+                hashtagsJson: JSON.stringify(bookmark.hashtags),
+                urlsJson: JSON.stringify(bookmark.urls),
+                quotedJson: bookmark.quoted === undefined ? null : JSON.stringify(bookmark.quoted),
+                stillPaths: stillPathsJson(stillPaths),
+              })
+              .onConflictDoUpdate({
+                target: bookmarks.id,
+                set: {
+                  author: sql`excluded.author`,
+                  handle: sql`excluded.handle`,
+                  avatar: sql`excluded.avatar`,
+                  text: sql`excluded.text`,
+                  timestamp: sql`excluded.timestamp`,
+                  mediaJson: sql`excluded.media_json`,
+                  hashtagsJson: sql`excluded.hashtags_json`,
+                  urlsJson: sql`excluded.urls_json`,
+                  quotedJson: sql`excluded.quoted_json`,
+                  stillPaths: sql`COALESCE(excluded.still_paths, ${bookmarks.stillPaths})`,
+                  embedding: keepIfUnchanged(bookmarks.embedding),
+                  projX: keepIfUnchanged(bookmarks.projX),
+                  projY: keepIfUnchanged(bookmarks.projY),
+                },
+              })
+            return existed > 0 ? ("updated" as const) : ("inserted" as const)
+          }),
+        )
+        .pipe(
+          Effect.catchTag("SqlError", (cause) => wrap("Bookmarks.upsert", [bookmark.id], cause)),
+        )
+    }),
+    deleteMany: Effect.fn("bookmarks.deleteMany")(function* (
+      ids: ReadonlyArray<string>,
+      deletedAt: string,
+    ) {
+      if (ids.length === 0) return []
+      const rows = yield* db
+        .transaction((tx) =>
+          Effect.gen(function* () {
+            const existing: Array<{ id: string; stillPaths: string | null }> = []
+            const tombstones = new Set<string>()
+            for (const chunk of chunks(ids)) {
+              existing.push(
+                ...(yield* tx
+                  .select({ id: bookmarks.id, stillPaths: bookmarks.stillPaths })
+                  .from(bookmarks)
+                  .where(inArray(bookmarks.id, [...chunk]))),
+              )
+              const deleted = yield* tx
+                .select({ id: deletedBookmarks.bookmarkId })
+                .from(deletedBookmarks)
+                .where(inArray(deletedBookmarks.bookmarkId, [...chunk]))
+              for (const row of deleted) tombstones.add(row.id)
+            }
+            const found = new Set(existing.map((row) => row.id))
+            const missing = ids.find((id) => !found.has(id) && !tombstones.has(id))
+            if (missing !== undefined) return yield* new BookmarkNotFound({ id: missing })
+            for (const chunk of chunks(ids)) {
+              yield* tx
+                .insert(deletedBookmarks)
+                .values(chunk.map((bookmarkId) => ({ bookmarkId, deletedAt })))
+                .onConflictDoUpdate({
+                  target: deletedBookmarks.bookmarkId,
+                  set: { deletedAt: sql`excluded.deleted_at` },
+                })
+              yield* tx.delete(bookmarkTags).where(inArray(bookmarkTags.bookmarkId, [...chunk]))
+              yield* tx.delete(bookmarks).where(inArray(bookmarks.id, [...chunk]))
+            }
+            const byId = new Map(existing.map((row) => [row.id, row]))
+            return ids.map((id) => byId.get(id) ?? { id, stillPaths: null })
+          }),
+        )
+        .pipe(Effect.catchTag("SqlError", (cause) => wrap("Bookmarks.deleteMany", [...ids], cause)))
+      return rows.map((row) => ({ id: row.id, stillPaths: parseStillPaths(row.stillPaths) }))
     }),
     setEmbedding: Effect.fn("bookmarks.setEmbedding")(function* (
       id: string,

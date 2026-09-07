@@ -195,6 +195,37 @@ describe.sequential("HttpApi", () => {
     )
   }, 30_000)
 
+  it("POST /api/bookmark-deletions removes content and prevents stale re-import", async () => {
+    resetDataDir()
+    await run(
+      Effect.gen(function* () {
+        const client = yield* HttpApiTest.groups(Api, ["xkeep"])
+        yield* client.importDump({ payload: dump })
+        yield* waitUntilImportIdle(client)
+        yield* client.addBookmarkTag({ params: { id: canaryId, tag: "stale" } })
+        const removed = yield* client.deleteBookmarks({ payload: { ids: [canaryId] } })
+        expect(removed).toEqual({ deleted: 1 })
+        expect((yield* client.listBookmarks()).bookmarks).toEqual([])
+        expect((yield* client.listTags()).tags).toEqual([])
+        expect(
+          yield* client.getBookmark({ params: { id: canaryId } }).pipe(Effect.exit),
+        ).toMatchObject({ _tag: "Failure" })
+        expect(
+          yield* client.getMedia({ params: { name: `${canaryId}-0.jpg` } }).pipe(Effect.exit),
+        ).toMatchObject({ _tag: "Failure" })
+        const stale = yield* client.importDump({ payload: dump })
+        expect(stale).toMatchObject({
+          imported: 0,
+          updated: 0,
+          skippedDeleted: 1,
+          stillsPending: 0,
+        })
+        yield* waitUntilImportIdle(client)
+        expect((yield* client.listBookmarks()).bookmarks).toEqual([])
+      }),
+    )
+  }, 30_000)
+
   it("GET /api/events names the first event server.connected", async () => {
     resetDataDir()
     await run(

@@ -43,8 +43,17 @@ export const Health = Schema.Struct({
 export const ImportResult = Schema.Struct({
   imported: Schema.Number,
   updated: Schema.Number,
+  skippedDeleted: Schema.Number,
   stillsPending: Schema.Number,
   pendingEmbeddings: Schema.Number,
+})
+
+export const BookmarkDeletion = Schema.Struct({
+  ids: Schema.Array(Schema.String).check(Schema.isUnique(), Schema.isMinLength(1)),
+})
+
+export const BookmarkDeletionResult = Schema.Struct({
+  deleted: Schema.Number,
 })
 
 const SearchHit = Schema.Struct({
@@ -147,10 +156,12 @@ const sseEvent = <Name extends string, Data extends Schema.Top>(name: Name, data
 export const SseEvent = Schema.Union([
   sseEvent("server.connected", Schema.Struct({})),
   sseEvent("heartbeat", Schema.Struct({})),
+  sseEvent("import.status", Schema.Struct({ status: Schema.Literals(["running", "idle"]) })),
   sseEvent("bookmark.tagged", Schema.Struct({ id: Schema.String, tag: TagName })),
   sseEvent("bookmark.untagged", Schema.Struct({ id: Schema.String, tag: TagName })),
   sseEvent("bookmark.upserted", Schema.Struct({ ids: Schema.Array(Schema.String) })),
   sseEvent("bookmark.embedded", Schema.Struct({ ids: Schema.Array(Schema.String) })),
+  sseEvent("bookmark.deleted", Schema.Struct({ ids: Schema.Array(Schema.String) })),
 ])
 
 export type SseEvent = typeof SseEvent.Type

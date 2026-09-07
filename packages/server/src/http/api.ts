@@ -9,6 +9,8 @@ import {
 } from "effect/unstable/httpapi"
 import {
   API_PREFIX,
+  BookmarkDeletion,
+  BookmarkDeletionResult,
   BookmarkDetail,
   BookmarkDump,
   BookmarkList,
@@ -73,6 +75,13 @@ export const Api = HttpApi.make("xkeep")
         HttpApiEndpoint.get("getBookmark", "/bookmarks/:id", {
           params: { id: Schema.String },
           success: BookmarkDetail,
+          error: [BookmarkNotFound, HttpApiError.InternalServerError],
+        }),
+      )
+      .add(
+        HttpApiEndpoint.post("deleteBookmarks", "/bookmark-deletions", {
+          payload: BookmarkDeletion,
+          success: BookmarkDeletionResult,
           error: [BookmarkNotFound, HttpApiError.InternalServerError],
         }),
       )

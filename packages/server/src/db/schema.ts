@@ -25,3 +25,8 @@ export const bookmarkTags = sqliteTable(
   },
   (table) => [primaryKey({ columns: [table.bookmarkId, table.tag] })],
 )
+
+export const deletedBookmarks = sqliteTable("deleted_bookmarks", {
+  bookmarkId: text("bookmark_id").primaryKey(),
+  deletedAt: text("deleted_at").notNull(),
+})

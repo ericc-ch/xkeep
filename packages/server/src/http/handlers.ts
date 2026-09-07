@@ -7,6 +7,7 @@ import { Bookmarks, type BookmarkListRow, type BookmarkRow } from "../db/bookmar
 import { Tags } from "../db/tags.ts"
 import { Llama } from "../embed/llama.ts"
 import { clusterBookmarks, DEFAULT_CLUSTER_K } from "../lib/cluster.ts"
+import { deleteBookmarks } from "../lib/delete.ts"
 import { importDump, Import } from "../lib/import.ts"
 import { search } from "../lib/search.ts"
 import { BookmarkCodec, Media } from "../schema.ts"
@@ -175,6 +176,19 @@ export const handlers = HttpApiBuilder.group(Api, "xkeep", (group) =>
           BookmarkNotFound: (error) => error,
           EffectDrizzleQueryError: () => new HttpApiError.InternalServerError(),
         }),
+      ),
+    )
+    .handle(
+      "deleteBookmarks",
+      Effect.fn("deleteBookmarks")(
+        function* (ctx) {
+          return yield* deleteBookmarks(ctx.payload.ids)
+        },
+        Effect.catchTags({
+          BookmarkNotFound: (error) => error,
+          EffectDrizzleQueryError: () => new HttpApiError.InternalServerError(),
+        }),
+        Effect.catch(() => new HttpApiError.InternalServerError()),
       ),
     )
     .handle(
