@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-09-04) — grilled with Erick. Amended 2026-09-05: UMAP (not PCA) for 2d; no auto-tag; canvas is the library view; no `minSize`; no coarse `bookmarks.changed`. Amended 2026-09-06: tags are flat strings, hierarchy and tag ids are gone — see ADR 0015. Amended 2026-09-08: clustering delegates to `ml-kmeans`.
+Accepted (2026-09-04) — grilled with Erick. Amended 2026-09-05: UMAP (not PCA) for 2d; no auto-tag; canvas is the spatial view; no `minSize`; no coarse `bookmarks.changed`. Amended 2026-09-06: tags are flat strings, hierarchy and tag ids are gone — see ADR 0015. Amended 2026-09-08: clustering delegates to `ml-kmeans`.
 
 ## Context
 
@@ -34,7 +34,7 @@ No auto-tag. The client may still take `memberIds` and call tag APIs.
 
 ### Not domain objects
 
-- **Canvas** — not an entity. The library UI places thumbs from cached UMAP `x`,`y` on the bookmark row. Still not a table. Cluster GET is not used to place marks.
+- **Canvas** — not an entity. The canvas UI places thumbs from cached UMAP `x`,`y` on the bookmark row. Still not a table. Cluster GET is not used to place marks.
 - **Stored projection** — `proj_x`/`proj_y` are cache written by the drain, not source of truth.
 
 ### HTTP surface

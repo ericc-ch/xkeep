@@ -164,11 +164,13 @@ test("the deterministic canvas workflow", async ({ context, page, request }) => 
   await page.getByRole("button", { name: "Apply mixed" }).click()
   await expect(page.getByRole("button", { name: "Remove mixed" })).toBeVisible()
 
-  await page.getByRole("button", { name: "Copy links" }).click()
+  await page.getByRole("button", { name: "More" }).click()
+  await page.getByRole("menuitem", { name: "Copy links" }).click()
   await expect(page.getByText("Links copied.")).toBeVisible()
   expect((await page.evaluate(() => navigator.clipboard.readText())).split("\n")).toHaveLength(2)
   const downloadPromise = page.waitForEvent("download")
-  await page.getByRole("button", { name: "Export selection" }).click()
+  await page.getByRole("button", { name: "More" }).click()
+  await page.getByRole("menuitem", { name: "Export selection" }).click()
   const download = await downloadPromise
   expect(download.suggestedFilename()).toBe("xkeep-selection.json")
 
@@ -193,9 +195,11 @@ test("the deterministic canvas workflow", async ({ context, page, request }) => 
 
   await page.getByRole("button", { name: /^Filters/ }).click()
   await page.getByRole("button", { name: "link", exact: true }).click()
-  await page.getByLabel("Tag", { exact: true }).selectOption("bulk")
-  await page.getByLabel("Author").selectOption("verify_beta")
-  await page.getByLabel("Saved").selectOption("30")
+  await page.getByLabel("Tag", { exact: true }).click()
+  await page.getByRole("option", { name: /bulk/ }).click()
+  await page.getByLabel("Author").fill("verify_beta")
+  await page.getByLabel("Saved").click()
+  await page.getByRole("option", { name: "Last 30 days" }).click()
   await expect(page.getByRole("button", { name: "Filters · 4" })).toBeVisible()
   const filteredCanvas = await canvas.screenshot()
   await search.fill(alphaText)
@@ -214,21 +218,19 @@ test("the deterministic canvas workflow", async ({ context, page, request }) => 
   await page.getByRole("button", { name: "Clusters" }).click()
   const cluster = Schema.decodeUnknownSync(ClusterResult)(await (await clusterResponse).json())
   expect(cluster.members).toHaveLength(3)
-  await page.getByRole("button", { name: /^Filters/ }).click()
-  const clusterCount = page.getByLabel(/^Cluster count/)
+  const clusterCount = page.getByText(/^Cluster count/)
   await expect(clusterCount).toBeVisible()
   await page.getByRole("button", { name: "Tags" }).click()
   await expect(clusterCount).toBeHidden()
-  await page.getByRole("button", { name: "Done" }).click()
 
   await canvas.focus()
   await canvas.press("Delete")
-  await expect(page.getByRole("dialog", { name: "Remove bookmark 1 of 3" })).toBeVisible()
+  await expect(page.getByRole("alertdialog", { name: "Remove bookmark 1 of 3" })).toBeVisible()
   await page.getByRole("button", { name: "Cancel" }).click()
   await page.getByRole("button", { name: "Delete", exact: true }).click()
   for (let remaining = 3; remaining > 0; remaining -= 1) {
     await expect(
-      page.getByRole("dialog", { name: `Remove bookmark ${String(4 - remaining)} of 3` }),
+      page.getByRole("alertdialog", { name: `Remove bookmark ${String(4 - remaining)} of 3` }),
     ).toBeVisible()
     await page.getByRole("button", { name: "Removed on X" }).click()
   }

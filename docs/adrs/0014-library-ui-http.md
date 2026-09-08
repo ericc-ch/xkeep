@@ -2,17 +2,17 @@
 
 ## Status
 
-Accepted (2026-09-05) — grilled with Erick. Amends ADR 0010 (events, open browser), ADR 0011 (projection, no auto-tag), and PLAN home-screen / auto-tag lines. Amended 2026-09-06: next cut (search, filters, clusters, detail card, auto-import) and bulk tag apply — see ADR 0015, 0016.
+Accepted (2026-09-05) — grilled with Erick. Amends ADR 0010 (events, open browser), ADR 0011 (projection, no auto-tag), and PLAN home-screen / auto-tag lines. Amended 2026-09-06: next cut (search, filters, clusters, detail card, auto-import) and bulk tag apply — see ADR 0015, 0016. Amended 2026-09-08: the `/` SPA is the canvas, not a "library".
 
 ## Context
 
-The daemon already has health, import, and semantic search. The library tab needs a pile read, live updates, tags, a spatial map, and stills over HTTP. PLAN said search was home and canvas was a second view. Grilling flipped that: the screen is the map of every bookmark.
+The daemon already has health, import, and semantic search. The canvas needs a pile read, live updates, tags, a spatial map, and stills over HTTP. PLAN said search was home and canvas was a second view. Grilling flipped that: the screen is the map of every bookmark.
 
 ## Decision
 
 ### UI
 
-- Origin `/` is the library SPA. `/api` stays JSON. Scalar stays `/api/docs`.
+- Origin `/` is the canvas SPA. `/api` stays JSON. Scalar stays `/api/docs`.
 - First paint is a **spatial map of the whole pile**. Each bookmark is a thumb (local still) or an empty plate. Click opens an HTML card. First cut uses list fields (author, handle, text, still), not `GET /api/bookmarks/:id`.
 - Search and filters only **highlight** ids the tab already drew. They do not replace the pile or hide rows (except a later real delete). Not in the first cut.
 - Search is semantic only (`GET /api/search?q=`). No keyword/BM25. Response is ids + scores.
@@ -58,7 +58,7 @@ Keep `tag.*` and `bookmark.tagged` / `untagged`. Cluster reads still do not publ
 - Stills: drain / import write aspect-preserving WebP rungs **32 / 64 / 128 / 256** beside the original (`name.64.webp`). Map fetches the rung that matches on-screen long-edge. Original only in the open card.
 - Open bookmark: **one** HTML card **pinned to the mark in screen space at 1×** (moves with the camera, does not `scale()` with it). Sharp DOM type + original still. Not a viewport modal. Not html-in-canvas. One open at a time. Thumbs stay sprites.
 - Chrome (drop, spread, later search/filters) is still normal page HTML. First cut has drop + spread only. FPS throwaways live under `/tmp` only.
-- Package: `packages/web`. Solid 1.9 for chrome + the in-world card. Pixi 8 for the map. StyleX (`stylex.attrs`). TanStack Router 1.x. `@effect/atom-solid` + `AtomHttpApi` over `@xkeep/server/api`. SSE is `client.events()` (`StreamSse`), not raw `EventSource`. Server serves `dist` at `/`. Solid 2 waits until `@effect/atom-solid` peers it.
+- Package: `packages/web`. Solid 1.9 for chrome + the in-world card. Pixi 8 for the map. StyleX (`stylex.attrs`). DOM chrome is owned Kobalte wrappers in `src/ui/` (ADR 0019). TanStack Router 1.x. `@effect/atom-solid` + `AtomHttpApi` over `@xkeep/server/api`. SSE is `client.events()` (`StreamSse`), not raw `EventSource`. Server serves `dist` at `/`. Solid 2 waits until `@effect/atom-solid` peers it.
 
 ## Consequences
 

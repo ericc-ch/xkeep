@@ -1,6 +1,6 @@
 import { Outlet, createRootRoute, createRoute, createRouter } from "@tanstack/solid-router"
-import { Import } from "./import.tsx"
-import { Library } from "./library.tsx"
+import { CanvasPage } from "./routes/index.tsx"
+import { ImportPage } from "./routes/import.tsx"
 
 const rootRoute = createRootRoute({
   component: () => <Outlet />,
@@ -9,13 +9,13 @@ const rootRoute = createRootRoute({
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
-  component: Library,
+  component: CanvasPage,
 })
 
 const importRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/import",
-  component: Import,
+  component: ImportPage,
 })
 
 const routeTree = rootRoute.addChildren([indexRoute, importRoute])

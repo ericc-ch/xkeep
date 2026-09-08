@@ -19,6 +19,7 @@
     "prepare": "effect-language-service patch",
     "prestart": "nub run build",
     "start": "nub run --filter @xkeep/cli start",
+    "xkeep": "nub run --filter @xkeep/cli xkeep",
     "test": "vitest run",
     "test:e2e": "nub run build && nub run test:e2e:built",
     "test:e2e:built": "playwright test",

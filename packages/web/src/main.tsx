@@ -1,6 +1,6 @@
 import { RouterProvider } from "@tanstack/solid-router"
 import { render } from "solid-js/web"
-import { router } from "./app.tsx"
+import { router } from "./router.tsx"
 import "./reset.css"
 
 const root = document.getElementById("app")

@@ -3,8 +3,8 @@ import { RegistryProvider, useAtomSet } from "@effect/atom-solid"
 import { BookmarkDump } from "@xkeep/server/schema"
 import * as stylex from "@stylexjs/stylex"
 import { createSignal, Match, onCleanup, onMount, Switch } from "solid-js"
-import { importDump } from "./api.ts"
-import { tokens } from "./tokens.stylex.ts"
+import { importDump } from "../api.ts"
+import { tokens } from "../tokens.stylex.ts"
 
 const chrome = stylex.create({
   root: {
@@ -55,9 +55,19 @@ class ImportBusySignal extends Data.TaggedError("ImportBusySignal") {}
 
 const isImportBusy = (cause: unknown): boolean => Predicate.isTagged(cause, "ImportBusy")
 
+const pingOpener = () => {
+  const opener = window.opener
+  if (opener === null) return
+  for (const origin of ALLOWED_ORIGINS) opener.postMessage("xkeep:ready", origin)
+}
+
 const ImportView = () => {
   const runImport = useAtomSet(() => importDump, { mode: "promise" })
   const [state, setState] = createSignal<ImportState>({ kind: "waiting" })
+  const errorReason = () => {
+    const current = state()
+    return current.kind === "error" ? current.reason : undefined
+  }
 
   onMount(() => {
     const onMessage = (event: MessageEvent) => {
@@ -104,7 +114,7 @@ const ImportView = () => {
       void Effect.runPromise(handle)
     }
     window.addEventListener("message", onMessage)
-    window.opener?.postMessage("xkeep:ready", "*")
+    pingOpener()
     onCleanup(() => window.removeEventListener("message", onMessage))
   })
 
@@ -126,10 +136,8 @@ const ImportView = () => {
               An import is already running. Try again in a moment.
             </p>
           </Match>
-          <Match when={state().kind === "error"}>
-            <p {...stylex.attrs([chrome.lead, chrome.bad])}>
-              Something failed. Close this window and try again.
-            </p>
+          <Match when={errorReason()}>
+            {(reason) => <p {...stylex.attrs([chrome.lead, chrome.bad])}>{reason()}</p>}
           </Match>
         </Switch>
         <p {...stylex.attrs(chrome.copy)}>
@@ -140,7 +148,7 @@ const ImportView = () => {
   )
 }
 
-export const Import = () => (
+export const ImportPage = () => (
   <RegistryProvider>
     <ImportView />
   </RegistryProvider>

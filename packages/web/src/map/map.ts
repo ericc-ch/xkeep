@@ -9,11 +9,9 @@ import {
   Text,
   Texture,
 } from "pixi.js"
-import type { PileItem } from "./api.ts"
+import type { PileItem } from "../api.ts"
 
-export const SPREAD_DEFAULT = 72
-export const SPREAD_MIN = 16
-export const SPREAD_MAX = 240
+const SPREAD_DEFAULT = 72
 const CARD_WIDTH = 168
 const MEDIA_HEIGHT = 104
 const TEXT_CARD_HEIGHT = 92
@@ -28,6 +26,7 @@ const MINIMAP_WIDTH = 184
 const MINIMAP_HEIGHT = 132
 const MINIMAP_PAD = 14
 const MINIMAP_POINTS_MAX = 4_000
+const OVERVIEW_MARKS_MAX = 4_000
 const VIEW_MARGIN = 240
 const OVERVIEW_ZOOM = 0.34
 const BUCKET_SIZE = 512
@@ -55,6 +54,11 @@ const tagColor = (tag: string): number => {
   let hash = 0
   for (let i = 0; i < tag.length; i++) hash = Math.imul(hash, 31) + tag.charCodeAt(i)
   return hsl(Math.abs(hash) % 360, 0.48, 0.38)
+}
+
+const overlayTag = (tags: ReadonlyArray<string>) => {
+  if (tags.length === 0) return undefined
+  return [...tags].sort().join("\0")
 }
 
 const readCamera = () => {
@@ -233,7 +237,6 @@ type Gesture =
 
 export type MapHandle = {
   readonly sync: (items: ReadonlyArray<PileItem>) => void
-  readonly setSpread: (spread: number) => void
   readonly setHighlight: (ids: ReadonlySet<string> | undefined) => void
   readonly setGroups: (groups: ReadonlyMap<string, number> | undefined) => void
   readonly setTagOverlay: (enabled: boolean) => void
@@ -242,17 +245,13 @@ export type MapHandle = {
   readonly fitAll: () => void
   readonly zoomBy: (factor: number) => void
   readonly destroy: () => void
-  readonly screenOfId: (id: string) => { x: number; y: number } | undefined
 }
 
 export const createMap = (
   host: HTMLElement,
   input: {
-    readonly onPick: (item: PileItem) => void
     readonly onSelectionChange?: (ids: ReadonlyArray<string>) => void
     readonly onDelete?: (ids: ReadonlyArray<string>) => void
-    readonly onView: () => void
-    readonly spread?: number
   },
 ): MapHandle => {
   const app = new Application()
@@ -275,8 +274,7 @@ export const createMap = (
   let destroyed = false
   let ready = false
   let framed = false
-  let spread = Math.min(SPREAD_MAX, Math.max(SPREAD_MIN, input.spread ?? SPREAD_DEFAULT))
-  let lastItems: ReadonlyArray<PileItem> = []
+  let spread = SPREAD_DEFAULT
   let gesture: Gesture = { kind: "idle" }
   let spaceHeld = false
   let highlight: ReadonlySet<string> | undefined
@@ -289,6 +287,7 @@ export const createMap = (
   let cachedMinimapBounds: MinimapBounds | undefined
   let nextPaintOrder = 0
   let resizeObserver: ResizeObserver | undefined
+  let pendingFocus: string | undefined
 
   minimap.addChild(minimapBackground, minimapPoints, minimapViewport)
   minimap.eventMode = "static"
@@ -391,7 +390,7 @@ export const createMap = (
       const x = bounds.offsetX + (mark.worldX - bounds.minX) * bounds.scale
       const y = bounds.offsetY + (mark.worldY - bounds.minY) * bounds.scale
       const group = groups?.get(mark.item.id)
-      const tag = tagOverlay ? mark.item.tags[0] : undefined
+      const tag = tagOverlay ? overlayTag(mark.item.tags) : undefined
       const color =
         group === undefined ? (tag === undefined ? MUTE : tagColor(tag)) : groupColor(group)
       minimapPoints.circle(x, y, group === undefined && tag === undefined ? 1.25 : 1.7)
@@ -462,7 +461,6 @@ export const createMap = (
   }
 
   const viewChanged = () => {
-    input.onView()
     updateVisible()
     scheduleMinimap()
     if (persistTimer !== undefined) clearTimeout(persistTimer)
@@ -477,7 +475,7 @@ export const createMap = (
     const w = CARD_WIDTH
     const h = hasStill ? MEDIA_HEIGHT + 64 : TEXT_CARD_HEIGHT
     const group = groups?.get(mark.item.id)
-    const tag = tagOverlay ? mark.item.tags[0] : undefined
+    const tag = tagOverlay ? overlayTag(mark.item.tags) : undefined
     const tint =
       group === undefined ? (tag === undefined ? PLATE_FILL : tagColor(tag)) : groupColor(group)
     mark.backing.clear()
@@ -502,10 +500,16 @@ export const createMap = (
     overview.clear()
     overview.visible = world.scale.x < OVERVIEW_ZOOM
     if (!overview.visible) return
+    const stride = Math.max(1, Math.ceil(marks.size / OVERVIEW_MARKS_MAX))
+    let index = 0
     for (const mark of marks.values()) {
+      const selected = selection.has(mark.item.id)
+      const keep = selected || index % stride === 0
+      index += 1
+      if (!keep) continue
       const group = groups?.get(mark.item.id)
-      const tag = tagOverlay ? mark.item.tags[0] : undefined
-      const color = selection.has(mark.item.id)
+      const tag = tagOverlay ? overlayTag(mark.item.tags) : undefined
+      const color = selected
         ? SELECTED
         : group === undefined
           ? tag === undefined
@@ -525,8 +529,8 @@ export const createMap = (
         alpha: highlight !== undefined && !highlight.has(mark.item.id) ? DIM_ALPHA : 0.8,
       })
       overview.stroke({
-        color: selection.has(mark.item.id) ? SELECTED : PLATE_LINE,
-        width: selection.has(mark.item.id) ? 4 : 1.5,
+        color: selected ? SELECTED : PLATE_LINE,
+        width: selected ? 4 : 1.5,
       })
     }
   }
@@ -695,7 +699,6 @@ export const createMap = (
   }
 
   const sync = (items: ReadonlyArray<PileItem>) => {
-    lastItems = items
     cachedMinimapBounds = undefined
     const placed = place(items, spread)
     const seen = new Set<string>()
@@ -745,6 +748,7 @@ export const createMap = (
       selection.delete(id)
     }
     frameOnce()
+    flushFocus()
     updateVisible()
     drawOverview()
     drawMinimap()
@@ -798,7 +802,6 @@ export const createMap = (
         selection.add(picked.item.id)
       }
       notifySelection()
-      if (selection.size === 1) input.onPick(picked.item)
       return
     }
     if (completed.kind !== "marquee") return
@@ -834,14 +837,28 @@ export const createMap = (
     notifySelection()
   }
 
-  const focus = (id: string) => {
+  const applyFocus = (id: string) => {
     const mark = marks.get(id)
-    if (mark === undefined) return
+    if (mark === undefined || !ready) return false
+    const width = host.clientWidth
+    const height = host.clientHeight
+    if (width <= 0 || height <= 0) return false
     if (world.scale.x < 0.55) world.scale.set(0.55)
-    world.x = host.clientWidth / 2 - mark.worldX * world.scale.x
-    world.y = host.clientHeight / 2 - mark.worldY * world.scale.y
+    world.x = width / 2 - mark.worldX * world.scale.x
+    world.y = height / 2 - mark.worldY * world.scale.y
     applySizes()
     viewChanged()
+    return true
+  }
+
+  const flushFocus = () => {
+    if (pendingFocus === undefined) return
+    if (applyFocus(pendingFocus)) pendingFocus = undefined
+  }
+
+  const focus = (id: string) => {
+    pendingFocus = id
+    flushFocus()
   }
 
   const zoomAt = (factor: number, x: number, y: number) => {
@@ -858,6 +875,7 @@ export const createMap = (
   }
 
   const fitAll = () => {
+    flushFocus()
     if (marks.size === 0) return
     let minX = Number.POSITIVE_INFINITY
     let minY = Number.POSITIVE_INFINITY
@@ -921,6 +939,7 @@ export const createMap = (
       viewChanged()
     })
     frameOnce()
+    flushFocus()
     app.stage.eventMode = "static"
     app.stage.hitArea = app.screen
     app.stage.on("pointerdown", (event: FederatedPointerEvent) => {
@@ -983,6 +1002,7 @@ export const createMap = (
     })
     resizeObserver = new ResizeObserver(() => {
       app.stage.hitArea = app.screen
+      flushFocus()
       updateVisible()
       drawMinimap()
     })
@@ -994,15 +1014,6 @@ export const createMap = (
     sync: (items) => {
       if (destroyed) return
       sync(items)
-    },
-    setSpread: (next) => {
-      if (destroyed) return
-      const clamped = Math.min(SPREAD_MAX, Math.max(SPREAD_MIN, next))
-      if (clamped === spread) return
-      spread = clamped
-      drawGrid(grid, spread)
-      sync(lastItems)
-      viewChanged()
     },
     setHighlight: (ids) => {
       if (destroyed) return
@@ -1038,7 +1049,10 @@ export const createMap = (
     },
     focus,
     fitAll,
-    zoomBy: (factor) => zoomAt(factor, host.clientWidth / 2, host.clientHeight / 2),
+    zoomBy: (factor) => {
+      flushFocus()
+      zoomAt(factor, host.clientWidth / 2, host.clientHeight / 2)
+    },
     destroy: () => {
       destroyed = true
       if (persistTimer !== undefined) clearTimeout(persistTimer)
@@ -1047,11 +1061,6 @@ export const createMap = (
       marks.clear()
       textures.clear()
       if (ready) app.destroy(true, { children: true, texture: true, textureSource: true })
-    },
-    screenOfId: (id) => {
-      const mark = marks.get(id)
-      if (mark === undefined) return undefined
-      return screenOf(mark.worldX, mark.worldY)
     },
   }
 }

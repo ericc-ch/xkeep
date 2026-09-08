@@ -14,7 +14,7 @@ Options: keep blocking (A); return after the dump file is saved (B); upsert sqli
 
 **C.** Validate the export (`{ bookmarks }`), upsert every bookmark with empty still paths, return `{ imported, updated, stillsPending, pendingEmbeddings }`. Do not write an on-disk copy of the export. A detached fiber downloads stills and upserts paths (ADR 0007 nulls embeddings when stills change). One import at a time: a second POST while that fiber runs is `409 ImportBusy`. `GET /api/health` includes `import: idle | running`. CLI stays one-shot; it prints the upsert result and does not wait for stills.
 
-Rejected: A (the hang). B (library empty until stills finish). Queued or concurrent imports.
+Rejected: A (the hang). B (canvas empty until stills finish). Queued or concurrent imports.
 
 ## Consequences
 

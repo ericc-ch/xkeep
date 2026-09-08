@@ -14,7 +14,7 @@
 
 ## How to get to it (user POV)
 
-Open `/`. Click `Import JSON` or drop an xkeep dump anywhere on the canvas. The status pill reports ready and embedding counts. Click the status pill for import and semantic-model details.
+Open `/`. Open the app menu and choose `Import JSON`, or drop an xkeep dump anywhere on the canvas. The status pill reports ready and embedding counts. Click the status pill for import and semantic-model details.
 
 ## Driving it with native E2E
 

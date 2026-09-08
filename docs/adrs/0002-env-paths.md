@@ -21,4 +21,4 @@ Overrides: CLI flags and the config file (`paths.data`, `paths.cache`, `paths.lo
 
 ## Consequences
 
-Backup = rsync the data dir. Wiping cache only forces a re-download of the embed runtime, not the library.
+Backup = rsync the data dir. Wiping cache only forces a re-download of the embed runtime, not the bookmark pile.

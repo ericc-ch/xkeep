@@ -58,16 +58,19 @@ Never pass `--browser headless` on this NixOS host. The bundled browser is not p
 The import proof uses these stable UI handles from the repository:
 
 - `getByRole("application", { name: "Bookmark canvas" })`
+- `getByRole("button", { name: "App menu" })`
 - `getByLabel("Import bookmarks JSON")`
 - `getByLabel("Search the canvas")`
 - `getByRole("button", { name: "Filters" })`
 - `getByRole("button", { name: "Tags" })`
 - `getByRole("button", { name: "Clusters" })`
+- `getByText(/^Cluster count/)`
 - `getByRole("button", { name: "Zoom in" })`
 - `getByRole("button", { name: "Zoom out" })`
 - `getByRole("button", { name: "Fit" })`
 - `getByRole("button", { name: "Close inspector" })`
 - `getByLabel("Add tag")`
+- `getByRole("button", { name: "More" })
 
 Pixi bookmark marks do not have DOM locators. Set a fixed viewport first. For a one-bookmark fixture, click the center of the `Bookmark canvas` bounding box. For several marks, use a screenshot and `page.mouse` coordinates. Use held-mouse movement for marquee selection and panning.
 

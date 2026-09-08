@@ -4,7 +4,7 @@ xkeep is a local X bookmarks app. Nub + Effect. Product shape is in `docs/PLAN.m
 
 - **Server** — `packages/server`: Effect HTTP on localhost. sqlite via Drizzle + `@effect/sql-sqlite-node`, embed worker, `HttpApi`. v1 intake is a json file. No paid X API. No chrome extension in v1.
 - **CLI** — `packages/cli`: user-facing `xkeep` bin. `service *` manages the daemon and `service.json`. `api` is curl against the running server (`GET /api/openapi.json` for operation ids). `service serve` loads `@xkeep/server` (`layer`).
-- **Web** — `packages/web`: Solid + Pixi library SPA. Server serves `dist` at `/`.
+- **Web** — `packages/web`: Solid + Pixi canvas SPA. DOM chrome is owned Kobalte + StyleX in `src/ui/`. Server serves `dist` at `/`.
 - **Dump** — `scripts/dump-bookmarks.js`: console snippet for `x.com/i/bookmarks` → bookmark export JSON.
 - **References sync** — `scripts/references.ts`: shallow-clones upstream sources into `/tmp/references/`.
 
@@ -20,6 +20,7 @@ Useful focused commands:
 - `nub run test:e2e` — build, then run native Playwright E2E against isolated data and deterministic embeddings
 - `nub run test:e2e:built` — run E2E against the current build
 - `nub run test:integration:network` — opt-in live media download canary; never part of `check`
+- `nub run xkeep` — source CLI with no subcommand (ensure daemon, ready banner, open origin)
 - `nub run dev` — Nub concurrently runs `dev:server` (`@xkeep/cli` source) and `dev:web` (Vite); smoke when development orchestration changes
 - `nub run start` — build, then the compiled CLI serves static web `dist`; smoke when production startup changes
 
@@ -29,7 +30,7 @@ For TypeScript style, follow the code-conventions skill.
 
 - `packages/server` — HTTP library (`db/`, `embed/`, `http/`, `lib/`; `drizzle/` migrations, `db:generate`)
 - `packages/cli` — user-facing bin (`service`, `api`)
-- `packages/web` — library SPA (Solid + Pixi). Server serves `dist` at `/`.
+- `packages/web` — canvas SPA (Solid + Pixi). Server serves `dist` at `/`.
 - `scripts/` — `dump-bookmarks.js`, `references.ts`
 - `docs/PLAN.md` — product shape
 - `docs/CONTEXT.md` — grilled locks (paths, HTTP, daemon, UI cut)

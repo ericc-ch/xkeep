@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@effect/atom-solid": "^4.0.0-rc.112",
+    "@kobalte/core": "^0.13.13",
     "@stylexjs/stylex": "^0.19.0",
     "@tanstack/solid-router": "^1.170.30",
     "@xkeep/server": "workspace:*",
