@@ -4,6 +4,7 @@ import { Atom, AtomHttpApi, Reactivity } from "effect/unstable/reactivity"
 import { Api } from "@xkeep/server/api"
 import {
   BookmarkDetail,
+  BookmarkDump,
   BookmarkListItem,
   Health,
   SearchResult,
@@ -53,7 +54,14 @@ export const liveAtom = Atom.keepAlive(
   ),
 )
 
-export const importDump = XkeepApi.mutation("xkeep", "importDump")
+export const importDump = XkeepApi.runtime.fn<{
+  readonly payload: typeof BookmarkDump.Type
+}>()(
+  Effect.fnUntraced(function* (request) {
+    const client = yield* XkeepApi
+    return yield* client.importDump(request)
+  }),
+)
 
 export type PileItem = typeof BookmarkListItem.Type
 export type Detail = typeof BookmarkDetail.Type
@@ -61,10 +69,61 @@ export type HealthStatus = typeof Health.Type
 export type SearchHit = (typeof SearchResult.Type)["hits"][number]
 export type TagCount = (typeof TagCounts.Type)["tags"][number]
 
-export const searchQuery = XkeepApi.mutation("xkeep", "search")
-export const bookmarkDetail = XkeepApi.mutation("xkeep", "getBookmark")
-export const clusterQuery = XkeepApi.mutation("xkeep", "cluster")
-export const addTagMutation = XkeepApi.mutation("xkeep", "addBookmarkTag")
-export const removeTagMutation = XkeepApi.mutation("xkeep", "removeBookmarkTag")
-export const bulkApplyTagMutation = XkeepApi.mutation("xkeep", "bulkApplyTag")
-export const deleteBookmarksMutation = XkeepApi.mutation("xkeep", "deleteBookmarks")
+export const searchQuery = XkeepApi.runtime.fn<{ readonly query: { readonly q: string } }>()(
+  Effect.fnUntraced(function* (request) {
+    const client = yield* XkeepApi
+    return yield* client.search(request)
+  }),
+)
+
+export const bookmarkDetail = XkeepApi.runtime.fn<{
+  readonly params: { readonly id: string }
+}>()(
+  Effect.fnUntraced(function* (request) {
+    const client = yield* XkeepApi
+    return yield* client.getBookmark(request)
+  }),
+)
+
+export const clusterQuery = XkeepApi.runtime.fn<{ readonly query: { readonly k: number } }>()(
+  Effect.fnUntraced(function* (request) {
+    const client = yield* XkeepApi
+    return yield* client.cluster(request)
+  }),
+)
+
+export const addTagMutation = XkeepApi.runtime.fn<{
+  readonly params: { readonly id: string; readonly tag: string }
+}>()(
+  Effect.fnUntraced(function* (request) {
+    const client = yield* XkeepApi
+    return yield* client.addBookmarkTag(request)
+  }),
+)
+
+export const removeTagMutation = XkeepApi.runtime.fn<{
+  readonly params: { readonly id: string; readonly tag: string }
+}>()(
+  Effect.fnUntraced(function* (request) {
+    const client = yield* XkeepApi
+    return yield* client.removeBookmarkTag(request)
+  }),
+)
+
+export const bulkApplyTagMutation = XkeepApi.runtime.fn<{
+  readonly payload: { readonly memberIds: ReadonlyArray<string>; readonly tag: string }
+}>()(
+  Effect.fnUntraced(function* (request) {
+    const client = yield* XkeepApi
+    return yield* client.bulkApplyTag(request)
+  }),
+)
+
+export const deleteBookmarksMutation = XkeepApi.runtime.fn<{
+  readonly payload: { readonly ids: ReadonlyArray<string> }
+}>()(
+  Effect.fnUntraced(function* (request) {
+    const client = yield* XkeepApi
+    return yield* client.deleteBookmarks(request)
+  }),
+)

@@ -181,9 +181,11 @@ export const importDump = Effect.fn("importDump")(function* (dump: BookmarkDump)
       fillStills(accepted).pipe(
         Effect.catchCause((cause) => Effect.logError(cause)),
         Effect.ensuring(
-          gate.end().pipe(
-            Effect.andThen(bus.publish({ event: "import.status", data: { status: "idle" } })),
-          ),
+          gate
+            .end()
+            .pipe(
+              Effect.andThen(bus.publish({ event: "import.status", data: { status: "idle" } })),
+            ),
         ),
       ),
       { startImmediately: true },
@@ -200,9 +202,9 @@ export const importDump = Effect.fn("importDump")(function* (dump: BookmarkDump)
     }
   }).pipe(
     Effect.tapError(() =>
-      gate.end().pipe(
-        Effect.andThen(bus.publish({ event: "import.status", data: { status: "idle" } })),
-      ),
+      gate
+        .end()
+        .pipe(Effect.andThen(bus.publish({ event: "import.status", data: { status: "idle" } }))),
     ),
   )
   return result

@@ -552,9 +552,7 @@ export const createMap = (
   const paintMark = async (mark: Mark) => {
     if (!("still" in mark.item) || !mark.root.visible || world.scale.x < OVERVIEW_ZOOM) return
     const generation = mark.generation
-    const rung = pickRung(
-      CARD_WIDTH * world.scale.x * markScale() * (window.devicePixelRatio || 1),
-    )
+    const rung = pickRung(CARD_WIDTH * world.scale.x * markScale() * (window.devicePixelRatio || 1))
     if (mark.rung === rung && mark.sprite !== undefined) return
     const url = rungUrl(mark.item.still, rung)
     const texture = await loadTexture(url)
@@ -610,7 +608,10 @@ export const createMap = (
       visibleMarks.delete(mark)
       mark.generation += 1
       if (mark.sprite !== undefined) {
-        const url = "still" in mark.item && mark.rung !== undefined ? rungUrl(mark.item.still, mark.rung) : undefined
+        const url =
+          "still" in mark.item && mark.rung !== undefined
+            ? rungUrl(mark.item.still, mark.rung)
+            : undefined
         const texture = mark.sprite.texture
         mark.root.removeChild(mark.sprite)
         mark.sprite.destroy()
@@ -619,7 +620,7 @@ export const createMap = (
         mark.sprite = undefined
         mark.rung = undefined
       }
-      for (const child of [...mark.root.children]) {
+      for (const child of mark.root.children.slice()) {
         if (child === mark.backing) continue
         mark.root.removeChild(child)
         child.destroy()
@@ -709,11 +710,11 @@ export const createMap = (
         existing.item.text !== node.item.text ||
         existing.item.handle !== node.item.handle ||
         existing.item.timestamp !== node.item.timestamp ||
-        ("still" in existing.item) !== ("still" in node.item)
+        "still" in existing.item !== "still" in node.item
       if (presentationChanged) {
         existing.generation += 1
         existing.copyAdded = false
-        for (const child of [...existing.root.children]) {
+        for (const child of existing.root.children.slice()) {
           if (child === existing.backing) continue
           existing.root.removeChild(child)
           child.destroy()
@@ -902,6 +903,8 @@ export const createMap = (
     world.addChildAt(overview, 1)
     host.appendChild(app.canvas)
     app.canvas.tabIndex = 0
+    app.canvas.setAttribute("aria-label", "Bookmark canvas")
+    app.canvas.setAttribute("role", "application")
     app.stage.addChild(world, marquee, minimap)
     world.x = host.clientWidth / 2
     world.y = host.clientHeight / 2

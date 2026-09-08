@@ -583,13 +583,6 @@ const LibraryView = () => {
     return AsyncResult.isSuccess(result) ? [...result.value.tags] : []
   })
   const authors = createMemo(() => [...new Set(items().map((item) => item.handle))].sort())
-  const sharedTags = createMemo(() => {
-    const selected = selectedItems()
-    const first = selected[0]
-    return first === undefined
-      ? []
-      : first.tags.filter((tag) => selected.every((item) => item.tags.includes(tag)))
-  })
   const tagStates = createMemo(() => {
     const selected = selectedItems()
     const all = new Set(selected.flatMap((item) => item.tags))
@@ -1140,6 +1133,7 @@ const LibraryView = () => {
         <input
           ref={setFileInput}
           type="file"
+          aria-label="Import bookmarks JSON"
           accept="application/json,.json"
           hidden
           onChange={(event) => {
@@ -1248,7 +1242,9 @@ const LibraryView = () => {
                         </Show>
                         <Show when={current().hashtags.length > 0}>
                           <p {...stylex.attrs(ui.meta)}>
-                            {current().hashtags.map((tag) => "#" + tag).join(" ")}
+                            {current()
+                              .hashtags.map((tag) => "#" + tag)
+                              .join(" ")}
                           </p>
                         </Show>
                         <For each={current().urls}>
@@ -1283,12 +1279,13 @@ const LibraryView = () => {
               >
                 {(state) => (
                   <span {...stylex.attrs(ui.tag)}>
-                    {state.tag}{state.shared ? "" : " · mixed"}
+                    {state.tag}
+                    {state.shared ? "" : " · mixed"}
                     <button
                       type="button"
                       aria-label={(state.shared ? "Remove " : "Apply ") + state.tag}
                       {...stylex.attrs(ui.tagX)}
-                      onClick={() => state.shared ? removeTag(state.tag) : addTag(state.tag)}
+                      onClick={() => (state.shared ? removeTag(state.tag) : addTag(state.tag))}
                     >
                       ×
                     </button>

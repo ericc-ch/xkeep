@@ -1,0 +1,15 @@
+{
+  "bookmarks": [
+    {
+      "id": "1990000000000000123",
+      "author": "Verification User",
+      "handle": "verify_xkeep",
+      "avatar": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Crect width='40' height='40' fill='%231d9bf0'/%3E%3C/svg%3E",
+      "timestamp": "2026-09-07T00:00:00.000Z",
+      "text": "Verification bookmark for the semantic canvas",
+      "media": [],
+      "hashtags": ["verification"],
+      "urls": ["https://example.com/xkeep-verification"]
+    }
+  ]
+}

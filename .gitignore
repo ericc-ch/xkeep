@@ -3,5 +3,6 @@ dist/
 *.tsbuildinfo
 result
 .direnv/
+.audit/
 *.log
 xkeep-dump.json
