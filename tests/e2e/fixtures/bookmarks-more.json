@@ -1,0 +1,26 @@
+{
+  "bookmarks": [
+    {
+      "id": "1990000000000000124",
+      "author": "Verification Beta",
+      "handle": "verify_beta",
+      "avatar": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Crect width='40' height='40' fill='%237856fa'/%3E%3C/svg%3E",
+      "timestamp": "2026-09-06T00:00:00.000Z",
+      "text": "Shared overlap vector for deterministic selection",
+      "media": [],
+      "hashtags": ["localfirst"],
+      "urls": ["https://example.com/xkeep-beta"]
+    },
+    {
+      "id": "1990000000000000125",
+      "author": "Verification Gamma",
+      "handle": "verify_gamma",
+      "avatar": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Crect width='40' height='40' fill='%23f91880'/%3E%3C/svg%3E",
+      "timestamp": "2026-09-05T00:00:00.000Z",
+      "text": "Shared overlap vector for deterministic selection",
+      "media": [],
+      "hashtags": ["pixi"],
+      "urls": ["https://example.com/xkeep-gamma"]
+    }
+  ]
+}

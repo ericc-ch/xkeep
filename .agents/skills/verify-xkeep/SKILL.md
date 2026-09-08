@@ -5,7 +5,9 @@ description: "Launch and drive the real xkeep canvas with Playwriter, isolated d
 
 # Verify xkeep
 
-Use this skill to prove xkeep through its web UI. The harness serves the production web build and the real HTTP, SSE, SQLite, import, projection, tag, and deletion code. It swaps only the large production embedding process for the repository's deterministic test embedding layer.
+Use this skill to investigate xkeep through its web UI when native E2E coverage does not explain a failure or does not yet cover a new workflow. The harness serves the production web build and the real HTTP, SSE, SQLite, import, projection, tag, and deletion code. It swaps only the large production embedding process for the repository's deterministic test embedding layer.
+
+Stable canvas workflows have graduated to `tests/e2e/`. Run `nub run test:e2e` for the permanent regression suite. Do not manually repeat a graduated feature unless its native test fails or visual exploration is needed.
 
 The harness uses port `55337` and the state files under `.audit/verify-xkeep/`. Run one verification instance at a time. Set `XKEEP_VERIFY_PORT` before launch when port `55337` is unavailable.
 
@@ -36,7 +38,7 @@ Doctor verifies all of these conditions:
 - `GET /api/health` reports `status: ok`.
 - The isolated SQLite file exists.
 
-## Drive
+## Drive an exploratory gap
 
 Use the extension-connected Chrome browser that is already running. Create a
 private Playwriter automation session on that browser; this does not launch a
@@ -47,14 +49,11 @@ automation session.
 XKEEP_VERIFY_BROWSER="$(playwriter browser list | awk '$2 == "extension" { print $1; exit }')"
 test -n "$XKEEP_VERIFY_BROWSER"
 XKEEP_VERIFY_SESSION="$(playwriter session new --browser "$XKEEP_VERIFY_BROWSER" | sed -n 's/^Session \([0-9][0-9]*\).*/\1/p')"
-playwriter -s "$XKEEP_VERIFY_SESSION" --timeout 120000 -f .agents/skills/verify-xkeep/scripts/verify-mutations.mjs
+playwriter -s "$XKEEP_VERIFY_SESSION" -e '<small focused probe for the unautomated behavior>'
 playwriter session delete "$XKEEP_VERIFY_SESSION"
 ```
 
-Never pass `--browser headless` on this NixOS host. The bundled browser is not
-part of this workflow and may fail to load system libraries. `verify-mutations.mjs`
-reads `current.json`, so the Playwriter relay does not need shell environment
-variables from the launch process.
+Never pass `--browser headless` on this NixOS host. The bundled browser is not part of this workflow and may fail to load system libraries. Read `current.json` to get the exact URL for the current isolated run.
 
 The import proof uses these stable UI handles from the repository:
 
@@ -72,7 +71,7 @@ The import proof uses these stable UI handles from the repository:
 
 Pixi bookmark marks do not have DOM locators. Set a fixed viewport first. For a one-bookmark fixture, click the center of the `Bookmark canvas` bounding box. For several marks, use a screenshot and `page.mouse` coordinates. Use held-mouse movement for marquee selection and panning.
 
-Read the files under `features/` before driving another flow.
+Read the files under `features/` before driving another flow. Each graduated feature delegates its repeatable proof to the native Playwright suite; use this section only to explore a gap that should later be promoted there.
 
 ## Evidence
 
@@ -83,12 +82,7 @@ Store proof in the current run's `$XKEEP_VERIFY_EVIDENCE` directory. Evidence mu
 - Browser logs when the flow fails.
 - The exact URL and feature name.
 
-`verify-mutations.mjs` writes before/after screenshots, `all-mutations.json`, and
-`browser-logs.json`. It proves import, search, detail, cluster, single tag, tag
-removal, bulk tag, deletion, and tombstone rejection through the browser. A
-failure writes `failure.png`, `failure.json`, and `failure-logs.json`. The
-isolated SQLite database remains under
-`$XKEEP_VERIFY_RUN_DIR/data/xkeep.sqlite`.
+The isolated SQLite database remains under `$XKEEP_VERIFY_RUN_DIR/data/xkeep.sqlite`.
 
 ## Cleanup
 
@@ -106,7 +100,6 @@ Cleanup checks the saved server and wrapper commands before signaling those exac
 - `scripts/doctor.sh`: verify process ownership, socket ownership, health, and SQLite state.
 - `scripts/cleanup.sh`: stop the saved verification PID and keep evidence.
 - `scripts/serve.ts`: serve the built app with real storage and deterministic embeddings.
-- `scripts/verify-mutations.mjs`: drive every web mutation through the UI and capture evidence.
 - `fixtures/bookmarks.json` and `fixtures/bookmarks-more.json`: deterministic no-network bookmark dumps.
 
-Run shell helpers directly. Run `serve.ts` with Nub only. Run `.mjs` browser helpers through `playwriter -f` only.
+Run shell helpers directly. Run `serve.ts` with Nub only.

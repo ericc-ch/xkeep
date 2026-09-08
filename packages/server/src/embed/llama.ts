@@ -14,6 +14,7 @@ import {
   Semaphore,
   Stream,
 } from "effect"
+import which from "which"
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
 import { ChildProcess } from "effect/unstable/process"
 import {
@@ -138,14 +139,8 @@ const parseHubFileUrl = (raw: string): HubFile | undefined => {
 }
 
 const findOnPath = Effect.fn("findOnPath")(function* (name: string) {
-  const fs = yield* FileSystem.FileSystem
-  const pathMod = yield* Path.Path
-  for (const dir of (process.env.PATH ?? "").split(delimiter)) {
-    if (dir.length === 0) continue
-    const candidate = pathMod.join(dir, name)
-    if (yield* fs.exists(candidate)) return Option.some(candidate)
-  }
-  return Option.none<string>()
+  const executable = yield* Effect.promise(() => which(name, { nothrow: true }))
+  return Option.fromNullishOr(executable)
 })
 
 const fileMeetsMin = Effect.fn("fileMeetsMin")(function* (dest: string, minBytes: number) {

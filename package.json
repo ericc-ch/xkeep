@@ -7,9 +7,11 @@
   ],
   "type": "module",
   "scripts": {
-    "build": "nub run --filter @xkeep/web build",
-    "check": "nub run typecheck && nub run test && nub run lint && nub run format && nub run build",
-    "dev": "nub scripts/dev.ts",
+    "build": "nub run -r --if-present build",
+    "check": "nub run typecheck && nub run test && nub run lint && nub run format && nub run build && nub run test:e2e:built",
+    "dev": "nub run \"/^dev:/\"",
+    "dev:server": "nub run --filter @xkeep/cli dev",
+    "dev:web": "nub run --filter @xkeep/web dev",
     "format": "oxfmt --check",
     "format:fix": "oxfmt",
     "lint": "oxlint",
@@ -18,6 +20,9 @@
     "prestart": "nub run build",
     "start": "nub run --filter @xkeep/cli start",
     "test": "vitest run",
+    "test:e2e": "nub run build && nub run test:e2e:built",
+    "test:e2e:built": "playwright test",
+    "test:integration:network": "vitest run --config vitest.network.config.ts",
     "typecheck": "tsc -b"
   },
   "dependencies": {
@@ -26,11 +31,16 @@
   },
   "devDependencies": {
     "@effect/language-service": "^0.87.1",
+    "@playwright/test": "^1.63.0",
     "@types/node": "^24.10.1",
+    "@types/which": "^3.0.4",
+    "get-port": "^7.2.0",
     "oxfmt": "^0.61.0",
     "oxlint": "^1.76.0",
+    "tsdown": "^0.23.0",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "which": "^7.0.0"
   },
   "devEngines": {
     "packageManager": {

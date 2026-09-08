@@ -1,5 +1,9 @@
 # Search and filters
 
+## Status
+
+`graduated-to-e2e` — `tests/e2e/xkeep.spec.ts`
+
 ## Sub-features
 
 - Enter-to-search semantic retrieval.
@@ -12,9 +16,13 @@
 
 Open `/` with embedded bookmarks. Enter a phrase in `Search the canvas` and press Enter. Open `Filters` for media, tag, author, and saved-date controls. Toggle `Tags` or `Clusters` in the top toolbar.
 
-## Driving it with Playwriter
+## Driving it with native E2E
 
-Use `getByLabel("Search the canvas")`, fill a known fixture phrase, and press `Enter`. Select a result by its bookmark text. Open `getByRole("button", { name: "Filters" })` and drive the named select elements `Tag`, `Author`, and `Saved`. Capture the whole canvas before and after because matching changes Pixi alpha rather than DOM visibility.
+Run `nub run test:e2e:built`. The native browser test searches known fixture text, selects a result, applies link/tag/author/date filters, compares canvas pixels for search/filter intersections, and exercises the mutually exclusive tag and cluster overlays.
+
+## Promotion Criteria
+
+The fixed clock, fixture text, authors, tags, URLs, and pixel comparisons make the workflow repeatable. Cluster output is also decoded against the public response schema before the overlay assertion.
 
 ## Gotchas
 

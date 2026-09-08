@@ -11,12 +11,17 @@ xkeep is a local X bookmarks app. Nub + Effect. Product shape is in `docs/PLAN.m
 Use Nub as package manager (`nub install`).
 Run first-party `.ts` with Nub (`nub path/to/file.ts`, `#!/usr/bin/env nub`). Use `node:` imports only, no runtime-specific APIs except in compiled-binary build scripts.
 
-After completing a task, run:
+After completing a task, always run:
 
-- `nub run check` — typecheck, `vitest`, lint, format, `build`
-- `nub run dev` — `@xkeep/cli` `service serve` + Vite
-- `nub run build` — `@xkeep/web` `dist`
-- `nub run start` — `build` then `@xkeep/cli` `service serve` (static `dist`)
+- `nub run check` — typecheck, deterministic `vitest`, lint, format, one `build`, then HTTP/browser/build-artifact E2E
+
+Useful focused commands:
+
+- `nub run test:e2e` — build, then run native Playwright E2E against isolated data and deterministic embeddings
+- `nub run test:e2e:built` — run E2E against the current build
+- `nub run test:integration:network` — opt-in live media download canary; never part of `check`
+- `nub run dev` — Nub concurrently runs `dev:server` (`@xkeep/cli` source) and `dev:web` (Vite); smoke when development orchestration changes
+- `nub run start` — build, then the compiled CLI serves static web `dist`; smoke when production startup changes
 
 For TypeScript style, follow the code-conventions skill.
 

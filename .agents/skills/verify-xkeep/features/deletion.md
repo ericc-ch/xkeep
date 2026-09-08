@@ -1,5 +1,9 @@
 # Deletion
 
+## Status
+
+`graduated-to-e2e` — `tests/e2e/xkeep.spec.ts` and `packages/server/test/http.e2e.test.ts`
+
 ## Sub-features
 
 - Delete from the inspector or keyboard.
@@ -12,9 +16,13 @@
 
 Select one or more bookmarks. Click `Delete` or press Delete while the canvas has focus. Open each post on X, remove the upstream bookmark, then click `Removed on X` to delete the local record and continue.
 
-## Driving it with Playwriter
+## Driving it with native E2E
 
-Use only the isolated fixture. Select the fixture mark and click `getByRole("button", { name: "Delete" })`. Verify the dialog title. Do not follow the external X link. Click `getByRole("button", { name: "Removed on X" })`, then fetch `/api/bookmarks` and confirm the id is absent. Upload the same fixture again and confirm the notice reports one kept deletion and the API still omits the id.
+Run `nub run test:e2e:built`. The native browser test covers keyboard and inspector entry points, cancellation, sequential confirmation, empty-canvas state, re-import rejection, and final API absence. The HTTP suite separately proves bookmark, tag, projection, embedding, and media cleanup plus tombstone behavior.
+
+## Promotion Criteria
+
+All destructive work runs against a unique temporary data directory. Visible dialog/notice assertions and public API reads prove each local side effect without touching normal xkeep data or following X links.
 
 ## Gotchas
 

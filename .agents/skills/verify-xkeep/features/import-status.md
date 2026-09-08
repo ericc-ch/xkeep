@@ -1,5 +1,9 @@
 # Import and status
 
+## Status
+
+`graduated-to-e2e` — `tests/e2e/xkeep.spec.ts` and `packages/server/test/http.e2e.test.ts`
+
 ## Sub-features
 
 - Import through the file chooser.
@@ -12,11 +16,13 @@
 
 Open `/`. Click `Import JSON` or drop an xkeep dump anywhere on the canvas. The status pill reports ready and embedding counts. Click the status pill for import and semantic-model details.
 
-## Driving it with Playwriter
+## Driving it with native E2E
 
-Run `scripts/verify-mutations.mjs`. The helper uses `getByLabel("Import bookmarks JSON")`, uploads the fixtures, waits for import notices, polls the real API until every bookmark has coordinates, and saves screenshots plus response bodies.
+Run `nub run test:e2e:built`. The native browser test covers drag/drop and file-picker imports, notices, ready/model status, SSE-driven embedding refresh, and tombstone skips. The HTTP suite covers import/update counts and embedding completion without network access.
 
-For drop coverage, create a `DataTransfer` in `page.evaluate`, attach the fixture as a `File`, and dispatch `dragover` plus `drop` on the page's `main` element.
+## Promotion Criteria
+
+The browser and HTTP flows use isolated SQLite directories, deterministic embeddings, local fixture avatars, and no remote media. Imported, updated, ready, and tombstone-skip outcomes have API or visible-UI assertions.
 
 ## Gotchas
 

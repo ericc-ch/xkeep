@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-09-04) — grilled with Erick. Amended 2026-09-05: UMAP (not PCA) for 2d; no auto-tag; canvas is the library view; no `minSize`; no coarse `bookmarks.changed`. Amended 2026-09-06: tags are flat strings, hierarchy and tag ids are gone — see ADR 0015.
+Accepted (2026-09-04) — grilled with Erick. Amended 2026-09-05: UMAP (not PCA) for 2d; no auto-tag; canvas is the library view; no `minSize`; no coarse `bookmarks.changed`. Amended 2026-09-06: tags are flat strings, hierarchy and tag ids are gone — see ADR 0015. Amended 2026-09-08: clustering delegates to `ml-kmeans`.
 
 ## Context
 
@@ -24,7 +24,7 @@ Hashtags from the X dump stay on the bookmark as imported metadata (`hashtags_js
 ### Ephemeral: cluster query
 
 - **Cluster is not saved.** There is no `clusters` table and no `cluster_id` on bookmarks.
-- A **cluster query** is a read-only k-means over bookmarks that already have embeddings (2048-d) for `groupId`. `x`,`y` are not computed here: the drain writes UMAP (`umap-js`) onto a row once; later rows transform into the same space. Import cannot project (no vectors yet).
+- A **cluster query** is a read-only k-means over bookmarks that already have embeddings (2048-d) for `groupId`. The implementation uses `ml-kmeans` with its k-means++ initialization and convergence handling rather than a local algorithm. `x`,`y` are not computed here: the drain writes UMAP (`umap-js`) onto a row once; later rows transform into the same space. Import cannot project (no vectors yet).
 - Query params that matter: `k` only (default 12). No `minSize`. Not a free "dimensions" knob for the embedding space (fixed by the model).
 - Response: `members` with `id`, cached `x`,`y`, ephemeral `groupId`, plus `skippedUnembedded`. Next call may return different groupings.
 - Bookmarks still embedding: **skip** them and return `skippedUnembedded: n`. Do not block on the drain; do not pretend they were clustered.

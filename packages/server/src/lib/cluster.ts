@@ -1,81 +1,9 @@
 import { UMAP } from "umap-js"
 import { Effect } from "effect"
-import { EMBED_DIMS } from "../config.ts"
+import { kmeans } from "ml-kmeans"
 import { Bookmarks, embeddingVector } from "../db/bookmarks.ts"
 
 export const DEFAULT_CLUSTER_K = 12
-
-const kmeans = (
-  vectors: ReadonlyArray<Float32Array>,
-  k: number,
-  random: () => number,
-): ReadonlyArray<number> => {
-  const n = vectors.length
-  if (n === 0) return []
-  const groups = Math.min(k, n)
-  const centroids: Array<Float32Array> = []
-  const used = new Set<number>()
-  while (centroids.length < groups) {
-    const index = Math.floor(random() * n)
-    if (used.has(index)) continue
-    const source = vectors[index]
-    if (source === undefined) continue
-    used.add(index)
-    centroids.push(new Float32Array(source))
-  }
-  const assign = Array.from({ length: n }, () => 0)
-  for (let iter = 0; iter < 20; iter++) {
-    let moved = false
-    for (let i = 0; i < n; i++) {
-      const vec = vectors[i]
-      if (vec === undefined) continue
-      let best = 0
-      let bestDist = Number.POSITIVE_INFINITY
-      for (let c = 0; c < centroids.length; c++) {
-        const centroid = centroids[c]
-        if (centroid === undefined) continue
-        let dist = 0
-        for (let d = 0; d < EMBED_DIMS; d++) {
-          const a = vec[d] ?? 0
-          const b = centroid[d] ?? 0
-          const delta = a - b
-          dist += delta * delta
-        }
-        if (dist < bestDist) {
-          bestDist = dist
-          best = c
-        }
-      }
-      if (assign[i] !== best) {
-        assign[i] = best
-        moved = true
-      }
-    }
-    const sums = centroids.map(() => new Float32Array(EMBED_DIMS))
-    const counts = centroids.map(() => 0)
-    for (let i = 0; i < n; i++) {
-      const vec = vectors[i]
-      const group = assign[i]
-      const sum = group === undefined ? undefined : sums[group]
-      if (vec === undefined || group === undefined || sum === undefined) continue
-      counts[group] = (counts[group] ?? 0) + 1
-      for (let d = 0; d < EMBED_DIMS; d++) {
-        sum[d] = (sum[d] ?? 0) + (vec[d] ?? 0)
-      }
-    }
-    for (let c = 0; c < centroids.length; c++) {
-      const centroid = centroids[c]
-      const sum = sums[c]
-      const count = counts[c] ?? 0
-      if (centroid === undefined || sum === undefined || count === 0) continue
-      for (let d = 0; d < EMBED_DIMS; d++) {
-        centroid[d] = (sum[d] ?? 0) / count
-      }
-    }
-    if (!moved) break
-  }
-  return assign
-}
 
 let session: UMAP | undefined
 
@@ -149,16 +77,17 @@ export const projectBookmarks = Effect.fn("projectBookmarks")(function* () {
 
 export const clusterBookmarks = Effect.fn("clusterBookmarks")(function* (input: {
   readonly k?: number | undefined
-  readonly random?: (() => number) | undefined
 }) {
   const k = input.k ?? DEFAULT_CLUSTER_K
-  const random = input.random ?? Math.random
   const { embedded, skippedUnembedded } = yield* loadEmbedded()
-  const groups = kmeans(
-    embedded.map((row) => row.vec),
-    k,
-    random,
-  )
+  const groups =
+    embedded.length === 0
+      ? []
+      : kmeans(
+          embedded.map((row) => Array.from(row.vec)),
+          Math.min(k, embedded.length),
+          {},
+        ).clusters
   const members: Array<{
     readonly id: string
     readonly x: number

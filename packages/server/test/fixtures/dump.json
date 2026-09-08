@@ -4,15 +4,10 @@
       "id": "1890000000000000123",
       "author": "Ada",
       "handle": "ada",
-      "avatar": "https://pbs.twimg.com/profile_images/1683325380441128960/yRsRRjGO_400x400.jpg",
+      "avatar": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Crect width='40' height='40' fill='%231d9bf0'/%3E%3C/svg%3E",
       "timestamp": "2026-09-01T00:00:00.000Z",
       "text": "xkeep e2e canary quartz-vector-7",
-      "media": [
-        {
-          "type": "photo",
-          "url": "https://pbs.twimg.com/profile_images/1683325380441128960/yRsRRjGO_400x400.jpg"
-        }
-      ],
+      "media": [],
       "hashtags": [],
       "urls": []
     }

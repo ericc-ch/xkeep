@@ -3,15 +3,18 @@
   "version": "0.0.0",
   "private": true,
   "bin": {
-    "xkeep": "./src/main.ts"
+    "xkeep": "./dist/main.js"
   },
   "type": "module",
   "scripts": {
-    "start": "nub src/main.ts service serve"
+    "build": "tsdown",
+    "dev": "nub src/main.ts service serve",
+    "start": "node dist/main.js service serve"
   },
   "dependencies": {
     "@effect/platform-node": "^4.0.0-rc.112",
     "@xkeep/server": "workspace:*",
-    "effect": "^4.0.0-rc.112"
+    "effect": "^4.0.0-rc.112",
+    "open": "^11.0.2"
   }
 }

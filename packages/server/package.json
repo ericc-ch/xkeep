@@ -4,12 +4,29 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/http/server.ts",
-    "./schema": "./src/schema.ts",
-    "./schema-http": "./src/http/schema.ts",
-    "./api": "./src/http/api.ts"
+    ".": {
+      "development": "./src/http/server.ts",
+      "types": "./dist/http/server.d.ts",
+      "default": "./dist/http/server.js"
+    },
+    "./schema": {
+      "development": "./src/schema.ts",
+      "types": "./dist/schema.d.ts",
+      "default": "./dist/schema.js"
+    },
+    "./schema-http": {
+      "development": "./src/http/schema.ts",
+      "types": "./dist/http/schema.d.ts",
+      "default": "./dist/http/schema.js"
+    },
+    "./api": {
+      "development": "./src/http/api.ts",
+      "types": "./dist/http/api.d.ts",
+      "default": "./dist/http/api.js"
+    }
   },
   "scripts": {
+    "build": "tsdown",
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
@@ -18,9 +35,12 @@
     "drizzle-orm": "1.0.0-rc.4",
     "effect": "^4.0.0-rc.112",
     "env-paths": "^4.0.0",
-    "umap-js": "^1.4.0"
+    "ml-kmeans": "^7.0.1",
+    "umap-js": "^1.4.0",
+    "which": "^7.0.0"
   },
   "devDependencies": {
+    "@types/which": "^3.0.4",
     "drizzle-kit": "1.0.0-rc.4"
   }
 }

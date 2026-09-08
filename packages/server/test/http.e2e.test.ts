@@ -1,4 +1,6 @@
-import { rmSync } from "node:fs"
+import { mkdtempSync, rmSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import {
   NodeChildProcessSpawner,
   NodeFileSystem,
@@ -6,7 +8,7 @@ import {
   NodeHttpServer,
   NodePath,
 } from "@effect/platform-node"
-import { describe, expect, it } from "vitest"
+import { afterAll, describe, expect, it } from "vitest"
 import { Data, Effect, FileSystem, Layer, Option, Schema, Stream } from "effect"
 import { HttpClient, HttpClientRequest, HttpRouter } from "effect/unstable/http"
 import { HttpApiClient, HttpApiTest } from "effect/unstable/httpapi"
@@ -23,7 +25,7 @@ import { Bus } from "../src/bus.ts"
 import { Import } from "../src/lib/import.ts"
 import dumpJson from "./fixtures/dump.json" with { type: "json" }
 
-const dataDir = "/tmp/xkeep-e2e"
+const dataDir = mkdtempSync(join(tmpdir(), "xkeep-http-e2e-"))
 const canaryId = "1890000000000000123"
 const canaryText = "xkeep e2e canary quartz-vector-7"
 
@@ -39,7 +41,7 @@ const e2eLayer = Layer.mergeAll(handlers, drainLayer).pipe(
   Layer.provide(bookmarksLayer),
   Layer.provide(tagsLayer),
   Layer.provide(Bus.layer),
-  Layer.provide(Import.layer),
+  Layer.provideMerge(Import.layer),
   Layer.provide(llamaLayerTest),
   Layer.provide(NodeHttpClient.layerNodeHttp),
   Layer.provide(NodePath.layer),
@@ -57,6 +59,8 @@ const run = <A, E, R>(effect: Effect.Effect<A, E, R>): Promise<A> =>
 const resetDataDir = () => {
   rmSync(dataDir, { recursive: true, force: true })
 }
+
+afterAll(resetDataDir)
 
 class EmbedTimeout extends Data.TaggedError("EmbedTimeout")<{
   readonly reason: string
@@ -109,17 +113,14 @@ describe.sequential("HttpApi", () => {
     )
   }, 30_000)
 
-  it("POST /api/imports downloads a still", async () => {
+  it("POST /api/imports stays network-free for bookmarks without media", async () => {
     resetDataDir()
     await run(
       Effect.gen(function* () {
         const client = yield* HttpApiTest.groups(Api, ["xkeep"])
         const result = yield* client.importDump({ payload: dump })
         expect(result.imported).toBe(1)
-        expect(result.stillsPending).toBe(1)
-        yield* waitUntilImportIdle(client)
-        const fs = yield* FileSystem.FileSystem
-        expect(yield* fs.exists(`${dataDir}/media/${canaryId}-0.jpg`)).toBe(true)
+        expect(result.stillsPending).toBe(0)
       }),
     )
   }, 30_000)
@@ -166,14 +167,16 @@ describe.sequential("HttpApi", () => {
     )
   }, 30_000)
 
-  it("POST /api/imports of a second dump while stills run returns 409", async () => {
+  it("POST /api/imports rejects work while an import owns the gate", async () => {
     resetDataDir()
     await run(
       Effect.gen(function* () {
         const client = yield* HttpApiTest.groups(Api, ["xkeep"])
-        yield* client.importDump({ payload: dump })
-        const second = yield* client.importDump({ payload: dump }).pipe(Effect.exit)
-        expect(second._tag).toBe("Failure")
+        const gate = yield* Import
+        yield* gate.begin()
+        const result = yield* client.importDump({ payload: dump }).pipe(Effect.exit)
+        expect(result._tag).toBe("Failure")
+        yield* gate.end()
       }),
     )
   }, 30_000)
@@ -188,9 +191,7 @@ describe.sequential("HttpApi", () => {
         const listed = yield* client.listBookmarks()
         expect(listed.bookmarks).toHaveLength(1)
         expect(listed.bookmarks[0]?.id).toBe(canaryId)
-        expect(listed.bookmarks[0]?.still).toBe(`/api/media/${canaryId}-0.jpg`)
-        const bytes = yield* client.getMedia({ params: { name: `${canaryId}-0.jpg` } })
-        expect(bytes.byteLength).toBeGreaterThan(0)
+        expect(listed.bookmarks[0]?.still).toBeUndefined()
       }),
     )
   }, 30_000)
@@ -202,6 +203,10 @@ describe.sequential("HttpApi", () => {
         const client = yield* HttpApiTest.groups(Api, ["xkeep"])
         yield* client.importDump({ payload: dump })
         yield* waitUntilImportIdle(client)
+        const fs = yield* FileSystem.FileSystem
+        const mediaPath = `${dataDir}/media/${canaryId}-0.jpg`
+        yield* fs.writeFile(mediaPath, Uint8Array.of(1, 2, 3))
+        expect(yield* fs.exists(mediaPath)).toBe(true)
         yield* client.addBookmarkTag({ params: { id: canaryId, tag: "stale" } })
         const removed = yield* client.deleteBookmarks({ payload: { ids: [canaryId] } })
         expect(removed).toEqual({ deleted: 1 })
@@ -213,6 +218,7 @@ describe.sequential("HttpApi", () => {
         expect(
           yield* client.getMedia({ params: { name: `${canaryId}-0.jpg` } }).pipe(Effect.exit),
         ).toMatchObject({ _tag: "Failure" })
+        expect(yield* fs.exists(mediaPath)).toBe(false)
         const stale = yield* client.importDump({ payload: dump })
         expect(stale).toMatchObject({
           imported: 0,

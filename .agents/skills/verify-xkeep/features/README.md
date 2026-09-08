@@ -1,5 +1,9 @@
 # xkeep feature map
 
+## Status
+
+All mapped workflows are `graduated-to-e2e` in `tests/e2e/xkeep.spec.ts`. Run `nub run test:e2e` for the build plus browser suite, or `nub run test:e2e:built` after an unchanged successful build.
+
 Start with these user-facing canvas flows:
 
 - [Canvas navigation](canvas-navigation.md)

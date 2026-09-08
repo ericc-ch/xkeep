@@ -1,6 +1,6 @@
 {
   "extends": "../../tsconfig.json",
-  "include": ["./src/"],
+  "include": ["./src/", "./tsdown.config.ts"],
   "compilerOptions": {
     "composite": true,
     "lib": ["ESNext"],

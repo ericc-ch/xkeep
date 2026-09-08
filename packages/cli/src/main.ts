@@ -1,5 +1,3 @@
-#!/usr/bin/env nub
-
 import { fileURLToPath } from "node:url"
 import { NodeHttpClient, NodeRuntime, NodeServices } from "@effect/platform-node"
 import { Effect, Layer, Option } from "effect"

@@ -1,5 +1,9 @@
 # Canvas navigation
 
+## Status
+
+`graduated-to-e2e` — `tests/e2e/xkeep.spec.ts`
+
 ## Sub-features
 
 - Wheel zoom around the pointer.
@@ -12,9 +16,13 @@
 
 Open `/` after at least one bookmark has embedded. The canvas fills the window. Zoom controls sit at the lower left. The minimap sits above them.
 
-## Driving it with Playwriter
+## Driving it with native E2E
 
-Locate `getByRole("application", { name: "Bookmark canvas" })`. Set the viewport to `1440 × 960` before coordinate work. Move the mouse to the canvas center and call `page.mouse.wheel(0, -300)` to zoom in. Hold `Space`, drag with `page.mouse`, then release `Space` to pan. Click `getByRole("button", { name: "Fit" })` to restore the full view. Reload and compare the canvas screenshot to prove camera persistence.
+Run `nub run test:e2e:built`. The native browser test uses a fixed `1440 × 960` viewport and proves wheel zoom, Space-drag, middle-button pan, zoom controls, Fit, minimap navigation, and camera restoration through observable `localStorage` camera changes.
+
+## Promotion Criteria
+
+The flow is deterministic because it uses fixed fixtures, a fixed viewport, persisted camera state, and direct before/after assertions. Keep new camera gestures in the native test rather than adding a long-lived Playwriter script.
 
 ## Gotchas
 
