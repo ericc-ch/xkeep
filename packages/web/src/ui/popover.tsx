@@ -7,7 +7,6 @@ const styles = stylex.create({
   content: {
     width: 360,
     padding: 16,
-    borderRadius: 16,
   },
 })
 

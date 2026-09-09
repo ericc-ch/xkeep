@@ -22,7 +22,7 @@ Run `nub run test:e2e:built`. The native browser test covers keyboard and inspec
 
 ## Promotion Criteria
 
-All destructive work runs against a unique temporary data directory. Visible dialog/notice assertions and public API reads prove each local side effect without touching normal xkeep data or following X links.
+All destructive work runs against a unique temporary data directory. Visible dialog assertions and public API reads prove each local side effect without touching normal xkeep data or following X links.
 
 ## Gotchas
 

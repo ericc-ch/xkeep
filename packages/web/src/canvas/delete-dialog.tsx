@@ -10,6 +10,7 @@ import {
   AlertDialogTitle,
 } from "../ui/alert-dialog.tsx"
 import { Button } from "../ui/button.tsx"
+import { surface } from "../ui/surface.stylex.ts"
 
 export type DeleteRun = {
   readonly ids: ReadonlyArray<string>
@@ -23,7 +24,7 @@ const ui = stylex.create({
     borderWidth: 1,
     borderStyle: "solid",
     borderColor: tokens.line,
-    borderRadius: 12,
+    borderRadius: tokens.radiusSm,
     fontSize: 14,
     lineHeight: 1.45,
   },
@@ -33,6 +34,7 @@ const ui = stylex.create({
 export const DeleteDialog = (props: {
   readonly run: Accessor<DeleteRun>
   readonly item: Accessor<PileItem | undefined>
+  readonly error: Accessor<string | undefined>
   readonly onCancel: () => void
   readonly onConfirm: () => void
 }) => {
@@ -66,6 +68,13 @@ export const DeleteDialog = (props: {
               <br />
               {short(item().text, 180)}
             </div>
+          )}
+        </Show>
+        <Show when={props.error()}>
+          {(message) => (
+            <p {...stylex.attrs(surface.hint)} aria-live="assertive">
+              {message()}
+            </p>
           )}
         </Show>
         <div {...stylex.attrs(ui.actions)}>

@@ -19,12 +19,12 @@ const umap = (n: number) =>
     minDist: 0.1,
   })
 
-const projectFresh = (
+const layoutVectors = (
   vectors: ReadonlyArray<Float32Array>,
 ): ReadonlyArray<readonly [number, number]> => {
   const n = vectors.length
   if (n === 0) return []
-  if (n === 1) return [[0, 0]]
+  if (n === 1 && session === undefined) return [[0, 0]]
   const data = vectors.map((vec) => Array.from(vec))
   if (session === undefined) {
     session = umap(n)
@@ -36,6 +36,26 @@ const projectFresh = (
     session = umap(n)
     return pairsOf(session.fit(data))
   }
+}
+
+const projectFresh = (
+  vectors: ReadonlyArray<Float32Array>,
+): ReadonlyArray<readonly [number, number]> => {
+  if (vectors.length === 0) return []
+  const unique: Array<Float32Array> = []
+  const at: Array<number> = []
+  const seen = new Map<string, number>()
+  for (const vec of vectors) {
+    const key = vec.join("\0")
+    const existing = seen.get(key)
+    if (existing === undefined) {
+      seen.set(key, unique.length)
+      at.push(unique.length)
+      unique.push(vec)
+    } else at.push(existing)
+  }
+  const coords = layoutVectors(unique)
+  return at.map((index) => coords[index] ?? [0, 0])
 }
 
 const loadEmbedded = Effect.fn("loadEmbedded")(function* () {

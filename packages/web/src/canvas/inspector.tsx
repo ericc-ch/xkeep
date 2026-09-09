@@ -1,5 +1,5 @@
 import * as stylex from "@stylexjs/stylex"
-import { For, Show, type Accessor, type Resource } from "solid-js"
+import { createSignal, For, onCleanup, Show, type Accessor, type Resource } from "solid-js"
 import { postUrl } from "./bookmark.ts"
 import { tokens } from "../tokens.stylex.ts"
 import type { Detail, PileItem } from "../api.ts"
@@ -26,8 +26,8 @@ const ui = stylex.create({
     borderLeftWidth: 1,
     borderLeftStyle: "solid",
     borderLeftColor: tokens.line,
-    backgroundColor: "rgba(0,0,0,.98)",
-    boxShadow: "-18px 0 44px rgba(0,0,0,.34)",
+    backgroundColor: tokens.pane,
+    boxShadow: tokens.shadowPane,
   },
   inspectorHead: {
     position: "sticky",
@@ -41,8 +41,8 @@ const ui = stylex.create({
     borderBottomWidth: 1,
     borderBottomStyle: "solid",
     borderBottomColor: tokens.line,
-    backgroundColor: "rgba(0,0,0,.94)",
-    backdropFilter: "blur(18px)",
+    backgroundColor: tokens.glass,
+    backdropFilter: tokens.blurGlass,
   },
   inspectorTitle: { margin: 0, fontSize: 19, fontWeight: 700 },
   inspectorBody: { padding: 20 },
@@ -50,9 +50,9 @@ const ui = stylex.create({
   avatar: {
     width: 42,
     height: 42,
-    borderRadius: 999,
+    borderRadius: tokens.radiusPill,
     objectFit: "cover",
-    backgroundColor: "#16181c",
+    backgroundColor: tokens.hover,
   },
   author: { margin: 0, fontSize: 15, fontWeight: 700 },
   handle: { margin: "2px 0 0", color: tokens.mute, fontSize: 14 },
@@ -65,9 +65,9 @@ const ui = stylex.create({
     borderWidth: 1,
     borderStyle: "solid",
     borderColor: tokens.line,
-    borderRadius: 14,
+    borderRadius: tokens.radiusLg,
     objectFit: "contain",
-    backgroundColor: "#050505",
+    backgroundColor: tokens.card,
   },
   meta: { margin: "12px 0 0", color: tokens.mute, fontSize: 13, lineHeight: 1.5 },
   divider: { height: 1, margin: "18px 0", backgroundColor: tokens.line },
@@ -77,7 +77,7 @@ const ui = stylex.create({
     borderWidth: 1,
     borderStyle: "solid",
     borderColor: tokens.line,
-    borderRadius: 14,
+    borderRadius: tokens.radiusLg,
   },
   quoteBody: { margin: 0, fontSize: 14, lineHeight: 1.45, whiteSpace: "pre-wrap" },
   tag: {
@@ -89,7 +89,7 @@ const ui = stylex.create({
     borderWidth: 1,
     borderStyle: "solid",
     borderColor: tokens.accent,
-    borderRadius: 999,
+    borderRadius: tokens.radiusMd,
     color: tokens.accent,
     fontSize: 13,
   },
@@ -118,14 +118,36 @@ export const Inspector = (props: {
   readonly onRemoveTag: (tag: string) => void
   readonly onClose: () => void
   readonly onDelete: () => void
-  readonly onCopyLinks: () => void
-  readonly onExport: () => void
+  readonly onExport: () => Promise<string | undefined>
+  readonly tagHint: Accessor<string | undefined>
 }) => {
+  const [moreOpen, setMoreOpen] = createSignal(false)
+  const [moreHint, setMoreHint] = createSignal<string>()
+  let moreHintTimer: ReturnType<typeof setTimeout> | undefined
+  onCleanup(() => {
+    if (moreHintTimer !== undefined) clearTimeout(moreHintTimer)
+  })
   const visibleDetail = () => {
     const item = props.selectedOne()
     const value = props.detail()
     if (item === undefined || value === undefined || value.id !== item.id) return undefined
     return value
+  }
+  const copyLinks = () => {
+    const items = props.selectedItems()
+    void navigator.clipboard
+      .writeText(items.map(postUrl).join("\n"))
+      .then(
+        () => setMoreHint(items.length === 1 ? "Link copied." : "Links copied."),
+        () => setMoreHint("Could not copy the links."),
+      )
+      .then(() => {
+        if (moreHintTimer !== undefined) clearTimeout(moreHintTimer)
+        moreHintTimer = setTimeout(() => {
+          moreHintTimer = undefined
+          setMoreHint(undefined)
+        }, 2000)
+      })
   }
 
   return (
@@ -210,6 +232,13 @@ export const Inspector = (props: {
         <span {...stylex.attrs(surface.label)}>
           {props.selectedItems().length === 1 ? "Tags" : "Shared tags"}
         </span>
+        <Show when={props.tagHint()}>
+          {(message) => (
+            <p {...stylex.attrs(surface.hint)} aria-live="polite">
+              {message()}
+            </p>
+          )}
+        </Show>
         <div {...stylex.attrs(ui.chips)}>
           <For
             each={
@@ -237,7 +266,7 @@ export const Inspector = (props: {
           </For>
           <TextField value={props.tagDraft()} onChange={props.onTagDraft}>
             <TextFieldInput
-              variant="pill"
+              variant="chip"
               aria-label="Add tag"
               placeholder="+ Add tag"
               onKeyDown={(event: KeyboardEvent) =>
@@ -265,13 +294,34 @@ export const Inspector = (props: {
           </Button>
         </div>
         <div {...stylex.attrs(ui.moreWrap)}>
-          <DropdownMenu>
+          <DropdownMenu
+            open={moreOpen()}
+            onOpenChange={(open) => {
+              setMoreOpen(open)
+              if (!open) setMoreHint(undefined)
+            }}
+          >
             <DropdownMenuTrigger {...buttonAttrs("ghost")}>More</DropdownMenuTrigger>
             <DropdownMenuContent>
-              <DropdownMenuItem onSelect={() => props.onCopyLinks()}>
+              <Show when={moreHint()}>
+                {(message) => (
+                  <p {...stylex.attrs(surface.hint)} aria-live="polite">
+                    {message()}
+                  </p>
+                )}
+              </Show>
+              <DropdownMenuItem closeOnSelect={false} onSelect={copyLinks}>
                 Copy {props.selectedItems().length === 1 ? "link" : "links"}
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => props.onExport()}>
+              <DropdownMenuItem
+                closeOnSelect={false}
+                onSelect={() => {
+                  void props.onExport().then((error) => {
+                    if (error === undefined) setMoreOpen(false)
+                    else setMoreHint(error)
+                  })
+                }}
+              >
                 Export selection
               </DropdownMenuItem>
             </DropdownMenuContent>

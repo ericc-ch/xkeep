@@ -54,11 +54,11 @@ Keep `tag.*` and `bookmark.tagged` / `untagged`. Cluster reads still do not publ
 ### Canvas kit
 
 - Map: GPU sprites (Pixi-class). tldraw is **out** (license; 5k unique thumbs = 0–2 fps on gl503ge). One live Application; SSE invalidates the pile, then `map.sync`. Do not remount.
-- Marks: dark plate + first still at **native aspect**. No tweet body on the map (Pixi text is a bitmap and goes soft). No still → plate only. UMAP `x`,`y` are AOT on the drain. The tab places `x * spread`, `-y * spread` (slider, persisted). Camera zoom is separate. Marks counter-scale only when zoomed out so they stay readable; zooming in enlarges them with the camera. Plates are square-cornered with a 1px pad.
+- Marks: dark plate + first still at **native aspect**. No tweet body on the map (Pixi text is a bitmap and goes soft). No still → plate only. UMAP `x`,`y` are AOT on the drain. The tab places `x * spread`, `-y * spread` (slider, persisted). Camera zoom is `0.05`–`64`: cards shrink with the view below 100%, and counter-scale above it so stacks separate (ADR 0017). Plates are square-cornered with a 1px pad.
 - Stills: drain / import write aspect-preserving WebP rungs **32 / 64 / 128 / 256** beside the original (`name.64.webp`). Map fetches the rung that matches on-screen long-edge. Original only in the open card.
 - Open bookmark: **one** HTML card **pinned to the mark in screen space at 1×** (moves with the camera, does not `scale()` with it). Sharp DOM type + original still. Not a viewport modal. Not html-in-canvas. One open at a time. Thumbs stay sprites.
-- Chrome (drop, spread, later search/filters) is still normal page HTML. First cut has drop + spread only. FPS throwaways live under `/tmp` only.
-- Package: `packages/web`. Solid 1.9 for chrome + the in-world card. Pixi 8 for the map. StyleX (`stylex.attrs`). DOM chrome is owned Kobalte wrappers in `src/ui/` (ADR 0019). TanStack Router 1.x. `@effect/atom-solid` + `AtomHttpApi` over `@xkeep/server/api`. SSE is `client.events()` (`StreamSse`), not raw `EventSource`. Server serves `dist` at `/`. Solid 2 waits until `@effect/atom-solid` peers it.
+- Page UI (drop, spread, later search/filters) is still normal page HTML. First cut has drop + spread only. FPS throwaways live under `/tmp` only.
+- Package: `packages/web`. Solid 1.9 for page UI and the in-world card. Pixi 8 for the map. StyleX (`stylex.attrs`). Page UI is owned Kobalte wrappers in `src/ui/` (ADR 0019). TanStack Router 1.x. `@effect/atom-solid` + `AtomHttpApi` over `@xkeep/server/api`. SSE is `client.events()` (`StreamSse`), not raw `EventSource`. Server serves `dist` at `/`. Solid 2 waits until `@effect/atom-solid` peers it.
 
 ## Consequences
 

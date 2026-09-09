@@ -20,7 +20,7 @@ Right inspector: Preserve selected author "Maya Chen", handle "@mayacodes", and 
 
 Status text: "2,418 ready · 36 embedding". Minimap remains always visible with muted colored semantic clusters and a blue viewport rectangle.
 
-Composition: single straight-on 16:10 application screenshot, no device frame, browser chrome, or perspective. Canvas takes roughly three quarters of the width and the right inspector the remainder.
+Composition: single straight-on 16:10 application screenshot, no device frame, browser window frame, or perspective. Canvas takes roughly three quarters of the width and the right inspector the remainder.
 
 Constraints: change visual styling and targeted fixes only; retain information architecture; no left sidebar; no feed columns; no dashboard; no daily-review queue; no Keep action; no recommendation panel; no resize handles; no engagement data; no giant text.
 

@@ -19,7 +19,7 @@ const styles = stylex.create({
     borderWidth: 1,
     borderStyle: "solid",
     borderColor: tokens.line,
-    borderRadius: 8,
+    borderRadius: tokens.radiusSm,
     color: tokens.ink,
     backgroundColor: tokens.bg,
     fontSize: 13,

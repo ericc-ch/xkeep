@@ -27,13 +27,11 @@ import {
   removeTagMutation,
   searchQuery,
   tagsAtom,
-  type HealthStatus,
   type PileItem,
   type SearchHit,
 } from "../api.ts"
 import { createMap, hasCoords, type MapHandle } from "../map/map.ts"
 import { tokens } from "../tokens.stylex.ts"
-import { postUrl } from "./bookmark.ts"
 import { DeleteDialog, type DeleteRun } from "./delete-dialog.tsx"
 import { Filters } from "./filters.tsx"
 import { Inspector } from "./inspector.tsx"
@@ -48,6 +46,12 @@ import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover.tsx"
 import { ClusterSlider } from "../ui/slider.tsx"
 import { surface } from "../ui/surface.stylex.ts"
 import { TextField, TextFieldInput } from "../ui/text-field.tsx"
+import dumpTemplate from "../../../../scripts/dump-bookmarks.js?raw"
+
+const dumpOriginMatch = /const ORIGIN = "([^"]+)"/.exec(dumpTemplate)
+const dumpOrigin = dumpOriginMatch?.[1]
+if (dumpOrigin === undefined) throw new Error("dump template is missing ORIGIN")
+const copyHintMs = 2000
 
 const ui = stylex.create({
   root: {
@@ -62,17 +66,17 @@ const ui = stylex.create({
   brandWrap: { position: "absolute", zIndex: 4, top: 14, left: 16 },
   brand: {
     display: "flex",
-    gap: 9,
+    gap: 6,
     alignItems: "center",
     height: 44,
     padding: "0 15px",
-    borderRadius: 999,
+    borderRadius: tokens.radiusMd,
     color: tokens.ink,
     fontSize: 16,
     fontWeight: 700,
     cursor: "pointer",
   },
-  x: { fontSize: 21, fontWeight: 500 },
+  brandCaret: { color: tokens.mute, fontSize: 12 },
   toolbar: {
     position: "absolute",
     zIndex: 4,
@@ -83,7 +87,9 @@ const ui = stylex.create({
     alignItems: "center",
     transform: "translateX(-50%)",
   },
+  toolbarInspector: { left: "calc((100% - 384px) / 2)" },
   searchBox: { position: "relative", width: "min(390px,34vw)" },
+  searchBoxInspector: { width: "min(320px,30vw)" },
   searchGlyph: {
     position: "absolute",
     top: 9,
@@ -100,24 +106,10 @@ const ui = stylex.create({
     height: 22,
     padding: 0,
     borderWidth: 0,
-    borderRadius: 999,
+    borderRadius: tokens.radiusPill,
     color: tokens.bg,
     backgroundColor: tokens.mute,
     cursor: "pointer",
-  },
-  hitsChip: {
-    display: "inline-flex",
-    alignItems: "center",
-    height: 44,
-    padding: "0 10px",
-    borderWidth: 1,
-    borderStyle: "solid",
-    borderColor: tokens.accent,
-    borderRadius: 999,
-    color: tokens.accent,
-    backgroundColor: "rgba(29,155,240,.1)",
-    fontSize: 12,
-    fontWeight: 600,
   },
   results: {
     position: "absolute",
@@ -131,9 +123,9 @@ const ui = stylex.create({
     borderWidth: 1,
     borderStyle: "solid",
     borderColor: tokens.line,
-    borderRadius: 16,
-    backgroundColor: "rgba(0,0,0,.97)",
-    boxShadow: "0 14px 48px rgba(0,0,0,.68)",
+    borderRadius: tokens.radiusMd,
+    backgroundColor: tokens.glassRaised,
+    boxShadow: tokens.shadowFloating,
     transform: "translateX(-50%)",
   },
   result: {
@@ -141,12 +133,12 @@ const ui = stylex.create({
     width: "100%",
     padding: "10px 12px",
     borderWidth: 0,
-    borderRadius: 10,
+    borderRadius: tokens.radiusSm,
     color: tokens.ink,
     backgroundColor: "transparent",
     textAlign: "left",
     cursor: "pointer",
-    ":hover": { backgroundColor: "#16181c" },
+    ":hover": { backgroundColor: tokens.hover },
   },
   resultText: { margin: 0, fontSize: 13, lineHeight: 1.4 },
   zoom: {
@@ -160,8 +152,8 @@ const ui = stylex.create({
     borderWidth: 1,
     borderStyle: "solid",
     borderColor: tokens.line,
-    borderRadius: 12,
-    backgroundColor: "rgba(0,0,0,.9)",
+    borderRadius: tokens.radiusMd,
+    backgroundColor: tokens.glass,
   },
   zoomButton: {
     height: 42,
@@ -178,8 +170,8 @@ const ui = stylex.create({
   status: {
     position: "absolute",
     zIndex: 4,
-    bottom: 16,
-    left: "50%",
+    top: 14,
+    right: 16,
     display: "flex",
     gap: 9,
     alignItems: "center",
@@ -188,35 +180,16 @@ const ui = stylex.create({
     borderWidth: 1,
     borderStyle: "solid",
     borderColor: tokens.line,
-    borderRadius: 999,
+    borderRadius: tokens.radiusMd,
     color: tokens.ink,
-    backgroundColor: "rgba(0,0,0,.9)",
+    backgroundColor: tokens.glass,
     fontSize: 13,
     fontWeight: 600,
     whiteSpace: "nowrap",
-    transform: "translateX(-50%)",
-    cursor: "pointer",
+    pointerEvents: "none",
   },
-  statusPanel: {
-    position: "absolute",
-    zIndex: 5,
-    bottom: 68,
-    left: "50%",
-    width: 280,
-    padding: 14,
-    borderWidth: 1,
-    borderStyle: "solid",
-    borderColor: tokens.line,
-    borderRadius: 14,
-    color: tokens.ink,
-    backgroundColor: "rgba(0,0,0,.96)",
-    boxShadow: "0 14px 48px rgba(0,0,0,.68)",
-    fontSize: 13,
-    lineHeight: 1.6,
-    transform: "translateX(-50%)",
-  },
-  dot: { width: 9, height: 9, borderRadius: 999, backgroundColor: "#00ba7c" },
-  dotBusy: { backgroundColor: tokens.accent },
+  statusInspector: { right: 400 },
+  dot: { width: 9, height: 9, borderRadius: tokens.radiusPill, backgroundColor: tokens.accent },
   empty: {
     position: "absolute",
     zIndex: 2,
@@ -231,26 +204,36 @@ const ui = stylex.create({
     borderWidth: 1,
     borderStyle: "solid",
     borderColor: tokens.line,
-    borderRadius: 16,
-    backgroundColor: "rgba(0,0,0,.92)",
+    borderRadius: tokens.radiusLg,
+    backgroundColor: tokens.glassRaised,
     textAlign: "center",
+  },
+  emptyIntake: {
+    maxWidth: 440,
+    textAlign: "start",
+    pointerEvents: "auto",
   },
   emptyTitle: { margin: "0 0 8px", fontSize: 18, fontWeight: 700 },
   emptyCopy: { margin: 0, color: tokens.mute, fontSize: 14, lineHeight: 1.5 },
-  notice: {
-    position: "absolute",
-    zIndex: 30,
-    right: 16,
-    bottom: 72,
-    maxWidth: 380,
-    padding: "10px 14px",
-    borderWidth: 1,
-    borderStyle: "solid",
-    borderColor: tokens.line,
-    borderRadius: 10,
+  emptySteps: {
+    margin: "12px 0 0",
+    paddingLeft: 20,
     color: tokens.ink,
-    backgroundColor: "rgba(0,0,0,.96)",
-    fontSize: 13,
+    fontSize: 14,
+    lineHeight: 1.55,
+  },
+  emptyStep: { margin: "0 0 6px" },
+  emptyLink: {
+    color: tokens.accent,
+    textDecoration: "none",
+    ":hover": { textDecoration: "underline" },
+  },
+  emptyActions: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "stretch",
+    gap: 8,
+    margin: "16px 0 12px",
   },
 })
 
@@ -259,16 +242,6 @@ type SearchState =
   | { readonly kind: "loading" }
   | { readonly kind: "hits"; readonly hits: ReadonlyArray<SearchHit> }
   | { readonly kind: "failed"; readonly reason: "embeddings" | "error" }
-
-const importLabel = (status: HealthStatus["import"]) =>
-  Predicate.isTagged(status, "running") ? "running" : "idle"
-
-const llamaLabel = (status: HealthStatus["llama"]) =>
-  Predicate.isTagged(status, "ready")
-    ? "ready"
-    : Predicate.isTagged(status, "starting")
-      ? "starting"
-      : "unavailable"
 
 const CanvasView = () => {
   useAtomMount(() => liveAtom)
@@ -298,12 +271,18 @@ const CanvasView = () => {
   const [tagDraft, setTagDraft] = createSignal("")
   const [deleteRun, setDeleteRun] = createSignal<DeleteRun>()
   const [importing, setImporting] = createSignal(false)
-  const [statusOpen, setStatusOpen] = createSignal(false)
-  const [notice, setNotice] = createSignal<string>()
+  const [snippetHint, setSnippetHint] = createSignal<string>()
+  const [importNote, setImportNote] = createSignal<string>()
+  const [tagHint, setTagHint] = createSignal<string>()
+  const [deleteError, setDeleteError] = createSignal<string>()
   const [fileInput, setFileInput] = createSignal<HTMLInputElement>()
   const [host, setHost] = createSignal<HTMLDivElement>()
   let map: MapHandle | undefined
   let searchRequest = 0
+  let snippetHintTimer: ReturnType<typeof setTimeout> | undefined
+  onCleanup(() => {
+    if (snippetHintTimer !== undefined) clearTimeout(snippetHintTimer)
+  })
 
   const items = createMemo<Array<PileItem>>(() => {
     const result = pile()
@@ -408,16 +387,16 @@ const CanvasView = () => {
     const embedded = AsyncResult.isSuccess(result)
       ? result.value.embedded
       : items().filter((item) => item.embedded).length
+    const pending = bookmarks - embedded
     const importingNow =
       AsyncResult.isSuccess(result) && Predicate.isTagged(result.value.import, "running")
     return {
-      busy: importingNow || embedded < bookmarks,
-      label: String(embedded) + " ready · " + String(bookmarks - embedded) + " embedding",
+      busy: importingNow || pending > 0,
+      label:
+        pending > 0
+          ? String(embedded) + " ready · " + String(pending) + " embedding"
+          : "Importing…",
     }
-  })
-  const healthValue = createMemo(() => {
-    const result = health()
-    return AsyncResult.isSuccess(result) ? result.value : undefined
   })
 
   const setSelected = (ids: ReadonlyArray<string>) => {
@@ -438,10 +417,11 @@ const CanvasView = () => {
         : runBulkTag({ payload: { memberIds: [...ids], tag } })
     void write
       .then(() => {
+        setTagHint(undefined)
         refreshTags()
         if (ids.length === 1) void refetchDetail()
       })
-      .catch(() => setNotice("Could not apply that tag."))
+      .catch(() => setTagHint("Could not apply that tag."))
   }
 
   const removeTag = (tag: string) => {
@@ -449,10 +429,11 @@ const CanvasView = () => {
     const first = ids[0]
     void Promise.all(ids.map((id) => runRemoveTag({ params: { id, tag } })))
       .then(() => {
+        setTagHint(undefined)
         refreshTags()
         if (ids.length === 1 && first !== undefined) void refetchDetail()
       })
-      .catch(() => setNotice("Could not remove that tag."))
+      .catch(() => setTagHint("Could not remove that tag."))
   }
 
   const submitSearch = () => {
@@ -491,14 +472,15 @@ const CanvasView = () => {
 
   const importFile = (file: File) => {
     setImporting(true)
-    setNotice(undefined)
+    setImportNote(undefined)
+    setSnippetHint(undefined)
     void file
       .text()
       .then((text) => JSON.parse(text) as unknown)
       .then((json) => Effect.runPromise(Schema.decodeUnknownEffect(BookmarkDump)(json)))
       .then((dump) => runImport({ payload: dump }))
       .then((result) => {
-        setNotice(
+        setImportNote(
           "Imported " +
             String(result.imported) +
             ", updated " +
@@ -509,7 +491,7 @@ const CanvasView = () => {
         )
       })
       .catch((cause) => {
-        setNotice(
+        setImportNote(
           Predicate.isTagged(cause, "ImportBusy")
             ? "An import is already running. Try again in a moment."
             : "That file could not be imported.",
@@ -535,35 +517,39 @@ const CanvasView = () => {
     const item = currentDeleteItem()
     if (run === undefined || item === undefined || run.deleting) return
     setDeleteRun({ ...run, deleting: true })
+    setDeleteError(undefined)
     void runDelete({ payload: { ids: [item.id] } })
       .then(() => {
         setSelected(selection().filter((id) => id !== item.id))
         if (run.index + 1 >= run.ids.length) {
           setDeleteRun(undefined)
-          setNotice(
-            String(run.ids.length) + " bookmark" + (run.ids.length === 1 ? "" : "s") + " removed.",
-          )
         } else {
           setDeleteRun({ ids: run.ids, index: run.index + 1, deleting: false })
         }
       })
       .catch(() => {
         setDeleteRun({ ...run, deleting: false })
-        setNotice("Could not remove the local bookmark.")
+        setDeleteError("Could not remove the local bookmark.")
       })
   }
 
-  const copyLinks = () => {
-    const links = selectedItems().map(postUrl).join("\n")
+  const copySnippet = () => {
     void navigator.clipboard
-      .writeText(links)
-      .then(() => setNotice(selection().length === 1 ? "Link copied." : "Links copied."))
-      .catch(() => setNotice("Could not copy the links."))
+      .writeText(dumpTemplate.replaceAll(dumpOrigin, window.location.origin))
+      .then(() => setSnippetHint("Snippet copied."))
+      .catch(() => setSnippetHint("Could not copy the snippet."))
+      .then(() => {
+        if (snippetHintTimer !== undefined) clearTimeout(snippetHintTimer)
+        snippetHintTimer = setTimeout(() => {
+          snippetHintTimer = undefined
+          setSnippetHint(undefined)
+        }, copyHintMs)
+      })
   }
 
-  const exportSelection = () => {
+  const exportSelection = (): Promise<string | undefined> => {
     const ids = selection()
-    void Promise.all(ids.map((id) => runDetail({ params: { id } })))
+    return Promise.all(ids.map((id) => runDetail({ params: { id } })))
       .then((details) => ({
         bookmarks: details.map((item) => ({
           id: item.id,
@@ -588,7 +574,8 @@ const CanvasView = () => {
         link.click()
         URL.revokeObjectURL(url)
       })
-      .catch(() => setNotice("Could not export the complete selection."))
+      .then(() => undefined)
+      .catch(() => "Could not export the complete selection.")
   }
 
   createEffect(() => {
@@ -640,11 +627,29 @@ const CanvasView = () => {
       <div {...stylex.attrs(ui.brandWrap)}>
         <DropdownMenu>
           <DropdownMenuTrigger aria-label="App menu" {...stylex.attrs([ui.brand, surface.glass])}>
-            <span {...stylex.attrs(ui.x)}>𝕏</span>
             xkeep
+            <span {...stylex.attrs(ui.brandCaret)}>▾</span>
           </DropdownMenuTrigger>
-          <DropdownMenuContent>
+          <DropdownMenuContent placement="bottom-start">
+            <Show when={snippetHint()}>
+              {(message) => (
+                <p {...stylex.attrs(surface.hint)} aria-live="polite">
+                  {message()}
+                </p>
+              )}
+            </Show>
+            <Show when={importNote()}>
+              {(message) => (
+                <p {...stylex.attrs(surface.hint)} aria-live="polite">
+                  {message()}
+                </p>
+              )}
+            </Show>
+            <DropdownMenuItem closeOnSelect={false} onSelect={copySnippet}>
+              Copy snippet
+            </DropdownMenuItem>
             <DropdownMenuItem
+              closeOnSelect={false}
               disabled={importing()}
               onSelect={() => {
                 fileInput()?.click()
@@ -667,8 +672,8 @@ const CanvasView = () => {
           }}
         />
       </div>
-      <div {...stylex.attrs(ui.toolbar)}>
-        <div {...stylex.attrs(ui.searchBox)}>
+      <div {...stylex.attrs([ui.toolbar, selectedItems().length > 0 && ui.toolbarInspector])}>
+        <div {...stylex.attrs([ui.searchBox, selectedItems().length > 0 && ui.searchBoxInspector])}>
           <span {...stylex.attrs(ui.searchGlyph)}>⌕</span>
           <TextField value={queryDraft()} onChange={setQueryDraft}>
             <TextFieldInput
@@ -692,9 +697,6 @@ const CanvasView = () => {
             </button>
           </Show>
         </div>
-        <Show when={search().kind === "hits"}>
-          <span {...stylex.attrs(ui.hitsChip)}>{String(hits().length)} hits</span>
-        </Show>
         <Popover
           open={filtersOpen()}
           onOpenChange={setFiltersOpen}
@@ -751,6 +753,9 @@ const CanvasView = () => {
         <Show when={clusterOn()}>
           <ClusterSlider value={clusterK()} onChange={setClusterK} />
         </Show>
+        <Show when={cluster.error}>
+          <p {...stylex.attrs(surface.quiet)}>Could not calculate clusters.</p>
+        </Show>
       </div>
 
       <Show when={search().kind !== "idle"}>
@@ -784,9 +789,6 @@ const CanvasView = () => {
           </For>
         </section>
       </Show>
-      <Show when={cluster.error}>
-        <p {...stylex.attrs(ui.notice)}>Could not calculate clusters.</p>
-      </Show>
 
       <div {...stylex.attrs(ui.zoom)}>
         <button
@@ -809,32 +811,16 @@ const CanvasView = () => {
           Fit
         </button>
       </div>
-      <Show when={statusOpen()}>
-        <div {...stylex.attrs(ui.statusPanel)}>
-          <strong>Canvas status</strong>
-          <br />
+      <Show when={status().busy}>
+        <div
+          role="status"
+          aria-live="polite"
+          {...stylex.attrs([ui.status, selectedItems().length > 0 && ui.statusInspector])}
+        >
+          <span {...stylex.attrs(ui.dot)} />
           {status().label}
-          <Show when={healthValue()}>
-            {(current) => (
-              <>
-                <br />
-                Import {importLabel(current().import)}
-                <br />
-                Semantic model {llamaLabel(current().llama)}
-              </>
-            )}
-          </Show>
         </div>
       </Show>
-      <button
-        type="button"
-        aria-expanded={statusOpen()}
-        {...stylex.attrs(ui.status)}
-        onClick={() => setStatusOpen((open) => !open)}
-      >
-        <span {...stylex.attrs([ui.dot, status().busy && ui.dotBusy])} />
-        {status().label}
-      </button>
 
       <Show when={selectedItems().length > 0}>
         <Inspector
@@ -848,8 +834,8 @@ const CanvasView = () => {
           onRemoveTag={removeTag}
           onClose={() => setSelected([])}
           onDelete={() => beginDelete(selection())}
-          onCopyLinks={copyLinks}
           onExport={exportSelection}
+          tagHint={tagHint}
         />
       </Show>
 
@@ -861,17 +847,64 @@ const CanvasView = () => {
             </div>
           </div>
         ),
-        onFailure: () => <p {...stylex.attrs(ui.notice)}>Could not load bookmarks.</p>,
+        onFailure: () => (
+          <div {...stylex.attrs(ui.empty)}>
+            <div {...stylex.attrs(ui.emptyCard)}>
+              <p {...stylex.attrs(ui.emptyTitle)}>Could not load bookmarks.</p>
+            </div>
+          </div>
+        ),
         onSuccess: (result) => {
           const ready = result.value.filter(hasCoords)
           if (result.value.length === 0) {
             return (
               <div {...stylex.attrs(ui.empty)}>
-                <div {...stylex.attrs(ui.emptyCard)}>
+                <div {...stylex.attrs([ui.emptyCard, ui.emptyIntake])}>
                   <p {...stylex.attrs(ui.emptyTitle)}>Your canvas is empty.</p>
-                  <p {...stylex.attrs(ui.emptyCopy)}>
-                    Import an xkeep JSON dump, or drop the file anywhere on the canvas.
-                  </p>
+                  <ol {...stylex.attrs(ui.emptySteps)}>
+                    <li {...stylex.attrs(ui.emptyStep)}>
+                      Open{" "}
+                      <a
+                        href="https://x.com/i/history"
+                        target="_blank"
+                        rel="noreferrer"
+                        {...stylex.attrs(ui.emptyLink)}
+                      >
+                        x.com/i/history
+                      </a>
+                    </li>
+                    <li {...stylex.attrs(ui.emptyStep)}>Open the browser console</li>
+                    <li {...stylex.attrs(ui.emptyStep)}>Paste the snippet and run it</li>
+                  </ol>
+                  <div {...stylex.attrs(ui.emptyActions)}>
+                    <Show when={snippetHint()}>
+                      {(message) => (
+                        <p {...stylex.attrs(surface.hint)} aria-live="polite">
+                          {message()}
+                        </p>
+                      )}
+                    </Show>
+                    <Show when={importNote()}>
+                      {(message) => (
+                        <p {...stylex.attrs(surface.hint)} aria-live="polite">
+                          {message()}
+                        </p>
+                      )}
+                    </Show>
+                    <Button variant="solid" onClick={copySnippet}>
+                      Copy snippet
+                    </Button>
+                    <Button
+                      variant="glass"
+                      disabled={importing()}
+                      onClick={() => {
+                        fileInput()?.click()
+                      }}
+                    >
+                      {importing() ? "Importing…" : "Import JSON"}
+                    </Button>
+                  </div>
+                  <p {...stylex.attrs(ui.emptyCopy)}>Or drop an xkeep JSON dump on the canvas.</p>
                 </div>
               </div>
             )
@@ -897,16 +930,13 @@ const CanvasView = () => {
           <DeleteDialog
             run={run}
             item={currentDeleteItem}
-            onCancel={() => setDeleteRun(undefined)}
+            error={deleteError}
+            onCancel={() => {
+              setDeleteError(undefined)
+              setDeleteRun(undefined)
+            }}
             onConfirm={confirmDeletedOnX}
           />
-        )}
-      </Show>
-      <Show when={notice()}>
-        {(message) => (
-          <button type="button" {...stylex.attrs(ui.notice)} onClick={() => setNotice(undefined)}>
-            {message()}
-          </button>
         )}
       </Show>
     </main>

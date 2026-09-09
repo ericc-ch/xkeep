@@ -35,6 +35,21 @@ test("the deterministic canvas workflow", async ({ context, page, request }) => 
   const input = page.getByLabel("Import bookmarks JSON")
   await expect(canvas).toBeVisible()
   await expect(page.getByText("Your canvas is empty.")).toBeVisible()
+  await expect(page.getByRole("link", { name: "x.com/i/history" })).toBeVisible()
+  const copySnippet = page.getByRole("button", { name: "Copy snippet" })
+  const importJson = page.getByRole("button", { name: "Import JSON" })
+  const copyColor = await copySnippet.evaluate((node) => getComputedStyle(node).color)
+  const copyBackground = await copySnippet.evaluate(
+    (node) => getComputedStyle(node).backgroundColor,
+  )
+  expect(copyColor).not.toBe(copyBackground)
+  await expect(importJson).not.toHaveCSS("border-color", "rgba(0, 0, 0, 0)")
+  await copySnippet.click()
+  await expect(page.getByText("Snippet copied.")).toBeVisible()
+  const origin = new URL(page.url()).origin
+  const emptyCopied = await page.evaluate(() => navigator.clipboard.readText())
+  expect(emptyCopied).toContain(`const ORIGIN = "${origin}"`)
+  expect(emptyCopied).toContain("xkeep-dump.json")
 
   const firstFixture = await readFile(fixturePath("bookmarks.json"))
   const dataTransfer = await page.evaluateHandle((encoded) => {
@@ -43,15 +58,27 @@ test("the deterministic canvas workflow", async ({ context, page, request }) => 
     transfer.items.add(new File([bytes], "bookmarks.json", { type: "application/json" }))
     return transfer
   }, firstFixture.toString("base64"))
-  await page.locator("main").dispatchEvent("drop", { dataTransfer })
-  await expect(page.getByText("Imported 1, updated 0, kept 0 deleted.")).toBeVisible()
-  await expect(page.getByText("1 ready · 0 embedding").last()).toBeVisible()
+  await page
+    .getByText("Your canvas is empty.")
+    .locator("..")
+    .dispatchEvent("drop", { dataTransfer })
+  await expect
+    .poll(async () => {
+      const response = await request.get("/api/health")
+      return Schema.decodeUnknownSync(Health)(await response.json()).embedded
+    })
+    .toBe(1)
+  await expect(page.getByRole("status")).toHaveCount(0)
+  await expect(page.getByText("An import is already running")).toHaveCount(0)
 
-  await page.getByText("1 ready · 0 embedding").last().click()
-  await expect(page.getByText("Canvas status")).toBeVisible()
-  await expect(page.getByText("Import idle")).toBeVisible()
-  await expect(page.getByText("Semantic model ready")).toBeVisible()
-  await page.getByText("1 ready · 0 embedding").last().click()
+  await page.getByRole("button", { name: "App menu" }).click()
+  await expect(page.getByText("Imported 1, updated 0, kept 0 deleted.")).toBeVisible()
+  await page.getByRole("menuitem", { name: "Copy snippet" }).click()
+  await expect(page.getByText("Snippet copied.")).toBeVisible()
+  const menuCopied = await page.evaluate(() => navigator.clipboard.readText())
+  expect(menuCopied).toContain(`const ORIGIN = "${origin}"`)
+  expect(menuCopied).toContain("xkeep-dump.json")
+  await page.keyboard.press("Escape")
 
   const box = await canvas.boundingBox()
   expect(box).not.toBeNull()
@@ -86,8 +113,16 @@ test("the deterministic canvas workflow", async ({ context, page, request }) => 
   await page.getByRole("button", { name: "Clusters" }).click()
 
   await input.setInputFiles(fixturePath("bookmarks-more.json"))
+  await expect
+    .poll(async () => {
+      const response = await request.get("/api/health")
+      return Schema.decodeUnknownSync(Health)(await response.json()).embedded
+    })
+    .toBe(3)
+  await expect(page.getByRole("status")).toHaveCount(0)
+  await page.getByRole("button", { name: "App menu" }).click()
   await expect(page.getByText("Imported 2, updated 0, kept 0 deleted.")).toBeVisible()
-  await expect(page.getByText("3 ready · 0 embedding").last()).toBeVisible()
+  await page.keyboard.press("Escape")
 
   await page.getByRole("button", { name: "Fit" }).click()
   await expect
@@ -144,21 +179,24 @@ test("the deterministic canvas workflow", async ({ context, page, request }) => 
   await page.getByLabel("Add tag").press("Enter")
   await expect(page.getByRole("button", { name: "Remove mixed" })).toBeVisible()
   await page.getByRole("button", { name: "Close inspector" }).click()
-  for (let step = 0; step < 8; step++) {
-    await page.getByRole("button", { name: "Zoom out" }).click()
-  }
-  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+  await page.getByRole("button", { name: "Fit" }).click()
+  await search.fill(overlapText)
+  await search.press("Enter")
+  await expect(betaResult).toBeVisible()
+  await betaResult.click()
+  await expect(page.getByRole("heading", { name: "Bookmark" })).toBeVisible()
+  await page.getByRole("button", { name: "Close inspector" }).click()
+  await expect(page.locator("aside")).toHaveCount(0)
+  const overlapBox = await canvas.boundingBox()
+  expect(overlapBox).not.toBeNull()
+  if (overlapBox === null) return
+  const overlapAt = { x: overlapBox.width / 2, y: overlapBox.height / 2 }
+  await canvas.click({ position: overlapAt })
   const firstOverlapDetail = await page.locator("aside").textContent()
-  await page.keyboard.down("Control")
-  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
-  await page.keyboard.up("Control")
+  await canvas.click({ position: overlapAt, modifiers: ["ControlOrMeta"] })
   const secondOverlapDetail = await page.locator("aside").textContent()
   expect(secondOverlapDetail).not.toBe(firstOverlapDetail)
-  await page.keyboard.down("Control")
-  await page.keyboard.down("Shift")
-  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
-  await page.keyboard.up("Shift")
-  await page.keyboard.up("Control")
+  await canvas.click({ position: overlapAt, modifiers: ["ControlOrMeta", "Shift"] })
   await expect(page.getByText("2 bookmarks", { exact: true })).toBeVisible()
   await expect(page.getByRole("button", { name: "Apply mixed" })).toBeVisible()
   await page.getByRole("button", { name: "Apply mixed" }).click()
@@ -169,7 +207,6 @@ test("the deterministic canvas workflow", async ({ context, page, request }) => 
   await expect(page.getByText("Links copied.")).toBeVisible()
   expect((await page.evaluate(() => navigator.clipboard.readText())).split("\n")).toHaveLength(2)
   const downloadPromise = page.waitForEvent("download")
-  await page.getByRole("button", { name: "More" }).click()
   await page.getByRole("menuitem", { name: "Export selection" }).click()
   const download = await downloadPromise
   expect(download.suggestedFilename()).toBe("xkeep-selection.json")
@@ -234,8 +271,9 @@ test("the deterministic canvas workflow", async ({ context, page, request }) => 
     ).toBeVisible()
     await page.getByRole("button", { name: "Removed on X" }).click()
   }
-  await expect(page.getByText("3 bookmarks removed.")).toBeVisible()
   await expect(page.getByText("Your canvas is empty.")).toBeVisible()
+  await expect(page.getByRole("button", { name: "Copy snippet" })).toBeVisible()
+  await expect(page.getByRole("button", { name: "Import JSON" })).toBeVisible()
 
   await input.setInputFiles(fixturePath("bookmarks.json"))
   await expect(page.getByText("Imported 0, updated 0, kept 1 deleted.")).toBeVisible()

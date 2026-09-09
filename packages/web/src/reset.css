@@ -1,28 +1,32 @@
-html,
-body,
-#app {
-  margin: 0;
-  height: 100%;
-  overflow: hidden;
-  background: #000;
-  color: #e7e9ea;
-}
+@layer reset {
+  html,
+  body,
+  #app {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    background: #000000;
+    color: #e7e9ea;
+    font-family:
+      -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
 
-* {
-  box-sizing: border-box;
-}
+  * {
+    box-sizing: border-box;
+  }
 
-button,
-input,
-select {
-  color: inherit;
-  font: inherit;
-}
+  button,
+  input,
+  select {
+    color: inherit;
+    font: inherit;
+  }
 
-button:focus-visible,
-input:focus-visible,
-select:focus-visible,
-a:focus-visible {
-  outline: 2px solid #1d9bf0;
-  outline-offset: 2px;
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  a:focus-visible {
+    outline: 2px solid #1d9bf0;
+    outline-offset: 2px;
+  }
 }

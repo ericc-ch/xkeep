@@ -6,7 +6,6 @@ import {
   BookmarkDetail,
   BookmarkDump,
   BookmarkListItem,
-  Health,
   SearchResult,
   TagCounts,
 } from "@xkeep/server/schema-http"
@@ -65,7 +64,6 @@ export const importDump = XkeepApi.runtime.fn<{
 
 export type PileItem = typeof BookmarkListItem.Type
 export type Detail = typeof BookmarkDetail.Type
-export type HealthStatus = typeof Health.Type
 export type SearchHit = (typeof SearchResult.Type)["hits"][number]
 export type TagCount = (typeof TagCounts.Type)["tags"][number]
 

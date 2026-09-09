@@ -6,7 +6,7 @@ import { createSignal, Match, onCleanup, onMount, Switch } from "solid-js"
 import { importDump } from "../api.ts"
 import { tokens } from "../tokens.stylex.ts"
 
-const chrome = stylex.create({
+const ui = stylex.create({
   root: {
     minHeight: "100vh",
     display: "flex",
@@ -22,6 +22,7 @@ const chrome = stylex.create({
     borderWidth: 1,
     borderStyle: "solid",
     borderColor: tokens.line,
+    borderRadius: tokens.radiusLg,
     backgroundColor: tokens.card,
   },
   lead: {
@@ -119,29 +120,29 @@ const ImportView = () => {
   })
 
   return (
-    <main {...stylex.attrs(chrome.root)}>
-      <div {...stylex.attrs(chrome.card)}>
+    <main {...stylex.attrs(ui.root)}>
+      <div {...stylex.attrs(ui.card)}>
         <Switch>
           <Match when={state().kind === "waiting"}>
-            <p {...stylex.attrs(chrome.lead)}>Waiting for the export…</p>
+            <p {...stylex.attrs(ui.lead)}>Waiting for the export…</p>
           </Match>
           <Match when={state().kind === "importing"}>
-            <p {...stylex.attrs(chrome.lead)}>Importing…</p>
+            <p {...stylex.attrs(ui.lead)}>Importing…</p>
           </Match>
           <Match when={state().kind === "done" ? { kind: "done" as const } : undefined}>
-            <p {...stylex.attrs(chrome.lead)}>Imported. Closing…</p>
+            <p {...stylex.attrs(ui.lead)}>Imported. Closing…</p>
           </Match>
           <Match when={state().kind === "busy"}>
-            <p {...stylex.attrs([chrome.lead, chrome.bad])}>
+            <p {...stylex.attrs([ui.lead, ui.bad])}>
               An import is already running. Try again in a moment.
             </p>
           </Match>
           <Match when={errorReason()}>
-            {(reason) => <p {...stylex.attrs([chrome.lead, chrome.bad])}>{reason()}</p>}
+            {(reason) => <p {...stylex.attrs([ui.lead, ui.bad])}>{reason()}</p>}
           </Match>
         </Switch>
-        <p {...stylex.attrs(chrome.copy)}>
-          Run the export snippet on x.com/i/bookmarks to send bookmarks here.
+        <p {...stylex.attrs(ui.copy)}>
+          Run the export snippet on x.com/i/history to send bookmarks here.
         </p>
       </div>
     </main>

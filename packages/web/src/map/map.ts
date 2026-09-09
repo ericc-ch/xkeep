@@ -10,6 +10,7 @@ import {
   Texture,
 } from "pixi.js"
 import type { PileItem } from "../api.ts"
+import { pixiColor, theme } from "../theme.ts"
 
 const SPREAD_DEFAULT = 72
 const CARD_WIDTH = 168
@@ -17,26 +18,30 @@ const MEDIA_HEIGHT = 104
 const TEXT_CARD_HEIGHT = 92
 const PAD = 10
 const RUNGS = [32, 64, 128, 256] as const
-const ZOOM_MIN = 0.2
+const ZOOM_MIN = 0.05
 const ZOOM_MAX = 64
-const GRID_WORLD = 24
+const CARD_ZOOM = 1
 const GRID_DIV = 8
 const CAMERA_KEY = "xkeep.camera.v1"
 const MINIMAP_WIDTH = 184
 const MINIMAP_HEIGHT = 132
 const MINIMAP_PAD = 14
 const MINIMAP_POINTS_MAX = 4_000
-const OVERVIEW_MARKS_MAX = 4_000
 const VIEW_MARGIN = 240
-const OVERVIEW_ZOOM = 0.34
 const BUCKET_SIZE = 512
 
-const PLATE_FILL = 0x050607
-const PLATE_LINE = 0x2f3336
-const INK = 0xe7e9ea
-const MUTE = 0x71767b
-const SELECTED = 0x1d9bf0
+const PLATE_FILL = pixiColor(theme.color.card)
+const PLATE_LINE = pixiColor(theme.color.line)
+const INK = pixiColor(theme.color.ink)
+const MUTE = pixiColor(theme.color.mute)
+const SELECTED = pixiColor(theme.color.accent)
+const GRID_AXIS = pixiColor(theme.color.gridAxis)
+const GRID_MAJOR = pixiColor(theme.color.gridMajor)
+const GRID_MINOR = pixiColor(theme.color.hover)
+const ORIGIN = pixiColor(theme.color.origin)
+const CANVAS_BG = pixiColor(theme.color.bg)
 const DIM_ALPHA = 0.1
+const MINIMAP_RADIUS = theme.radius.md
 
 const hsl = (h: number, s: number, l: number): number => {
   const a = s * Math.min(l, 1 - l)
@@ -59,6 +64,47 @@ const tagColor = (tag: string): number => {
 const overlayTag = (tags: ReadonlyArray<string>) => {
   if (tags.length === 0) return undefined
   return [...tags].sort().join("\0")
+}
+
+const pathRoundRect = (
+  graphics: Graphics,
+  rect: {
+    readonly x: number
+    readonly y: number
+    readonly width: number
+    readonly height: number
+    readonly radii: {
+      readonly tl: number
+      readonly tr: number
+      readonly br: number
+      readonly bl: number
+    }
+  },
+) => {
+  const cap = Math.min(rect.width, rect.height) / 2
+  const tl = Math.min(rect.radii.tl, cap)
+  const tr = Math.min(rect.radii.tr, cap)
+  const br = Math.min(rect.radii.br, cap)
+  const bl = Math.min(rect.radii.bl, cap)
+  if (tl === tr && tr === br && br === bl) {
+    if (tl === 0) graphics.rect(rect.x, rect.y, rect.width, rect.height)
+    else graphics.roundRect(rect.x, rect.y, rect.width, rect.height, tl)
+    return
+  }
+  graphics.moveTo(rect.x + tl, rect.y)
+  graphics.lineTo(rect.x + rect.width - tr, rect.y)
+  if (tr > 0) graphics.arc(rect.x + rect.width - tr, rect.y + tr, tr, -Math.PI / 2, 0)
+  else graphics.lineTo(rect.x + rect.width, rect.y)
+  graphics.lineTo(rect.x + rect.width, rect.y + rect.height - br)
+  if (br > 0) graphics.arc(rect.x + rect.width - br, rect.y + rect.height - br, br, 0, Math.PI / 2)
+  else graphics.lineTo(rect.x + rect.width, rect.y + rect.height)
+  graphics.lineTo(rect.x + bl, rect.y + rect.height)
+  if (bl > 0) graphics.arc(rect.x + bl, rect.y + rect.height - bl, bl, Math.PI / 2, Math.PI)
+  else graphics.lineTo(rect.x, rect.y + rect.height)
+  graphics.lineTo(rect.x, rect.y + tl)
+  if (tl > 0) graphics.arc(rect.x + tl, rect.y + tl, tl, Math.PI, (3 * Math.PI) / 2)
+  else graphics.lineTo(rect.x, rect.y)
+  graphics.closePath()
 }
 
 const readCamera = () => {
@@ -179,29 +225,6 @@ const addCopy = (root: Container, item: PileItem) => {
   root.addChild(body)
 }
 
-const drawGrid = (g: Graphics, spread: number) => {
-  g.clear()
-  const step = Math.max(spread / GRID_DIV, 1)
-  const hi = GRID_WORLD * spread
-  const lines = Math.round((hi * 2) / step)
-  for (let i = -lines / 2; i <= lines / 2; i++) {
-    const p = i * step
-    const axis = i === 0
-    const major = i % GRID_DIV === 0
-    g.moveTo(-hi, p)
-    g.lineTo(hi, p)
-    g.moveTo(p, -hi)
-    g.lineTo(p, hi)
-    g.stroke({
-      color: axis ? 0x3a3d44 : major ? 0x23262c : 0x16181c,
-      width: axis ? 1.5 : 1,
-      alpha: axis ? 0.55 : major ? 0.4 : 0.28,
-    })
-  }
-  g.rect(-3, -3, 6, 6)
-  g.fill({ color: 0x8a8680, alpha: 0.7 })
-}
-
 type Mark = {
   item: PileItem
   worldX: number
@@ -259,13 +282,14 @@ export const createMap = (
   world.sortableChildren = true
   world.eventMode = "static"
   const grid = new Graphics()
-  const overview = new Graphics()
-  overview.visible = false
+  grid.eventMode = "none"
   const marquee = new Graphics()
   const minimap = new Container()
   const minimapBackground = new Graphics()
   const minimapPoints = new Graphics()
   const minimapViewport = new Graphics()
+  const minimapMask = new Graphics()
+  minimapMask.eventMode = "none"
   const marks = new Map<string, Mark>()
   const buckets = new Map<string, Set<Mark>>()
   const visibleMarks = new Set<Mark>()
@@ -283,13 +307,14 @@ export const createMap = (
   let persistTimer: ReturnType<typeof setTimeout> | undefined
   let minimapFrame: number | undefined
   let updateVisible = () => undefined
-  let drawOverview = () => undefined
   let cachedMinimapBounds: MinimapBounds | undefined
   let nextPaintOrder = 0
   let resizeObserver: ResizeObserver | undefined
   let pendingFocus: string | undefined
 
-  minimap.addChild(minimapBackground, minimapPoints, minimapViewport)
+  minimap.addChild(minimapBackground, minimapPoints, minimapMask, minimapViewport)
+  minimapPoints.mask = minimapMask
+  minimapMask.renderable = false
   minimap.eventMode = "static"
   minimap.cursor = "crosshair"
 
@@ -298,7 +323,7 @@ export const createMap = (
     y: world.y + worldY * world.scale.y,
   })
 
-  const markScale = () => (world.scale.x < 1 ? 1 / Math.max(world.scale.x, 1e-6) : 1)
+  const markScale = () => (world.scale.x > CARD_ZOOM ? CARD_ZOOM / world.scale.x : 1)
 
   const bucketKey = (x: number, y: number) =>
     `${String(Math.floor(x / BUCKET_SIZE))}:${String(Math.floor(y / BUCKET_SIZE))}`
@@ -376,9 +401,12 @@ export const createMap = (
     minimap.y = Math.max(16, host.clientHeight - MINIMAP_HEIGHT - 72)
     minimap.hitArea = new Rectangle(0, 0, MINIMAP_WIDTH, MINIMAP_HEIGHT)
     minimapBackground.clear()
-    minimapBackground.roundRect(0, 0, MINIMAP_WIDTH, MINIMAP_HEIGHT, 12)
-    minimapBackground.fill({ color: 0x080a0c, alpha: 0.94 })
+    minimapBackground.roundRect(0, 0, MINIMAP_WIDTH, MINIMAP_HEIGHT, MINIMAP_RADIUS)
+    minimapBackground.fill({ color: PLATE_FILL, alpha: 0.94 })
     minimapBackground.stroke({ color: PLATE_LINE, width: 1 })
+    minimapMask.clear()
+    minimapMask.roundRect(0, 0, MINIMAP_WIDTH, MINIMAP_HEIGHT, MINIMAP_RADIUS)
+    minimapMask.fill({ color: 0xffffff })
     minimapPoints.clear()
     minimapViewport.clear()
     const bounds = minimapBounds()
@@ -398,13 +426,33 @@ export const createMap = (
     }
     const worldLeft = -world.x / world.scale.x
     const worldTop = -world.y / world.scale.y
-    minimapViewport.rect(
-      bounds.offsetX + (worldLeft - bounds.minX) * bounds.scale,
-      bounds.offsetY + (worldTop - bounds.minY) * bounds.scale,
-      (host.clientWidth / world.scale.x) * bounds.scale,
-      (host.clientHeight / world.scale.y) * bounds.scale,
-    )
-    minimapViewport.stroke({ color: SELECTED, width: 1.5 })
+    const vx = bounds.offsetX + (worldLeft - bounds.minX) * bounds.scale
+    const vy = bounds.offsetY + (worldTop - bounds.minY) * bounds.scale
+    const vw = (host.clientWidth / world.scale.x) * bounds.scale
+    const vh = (host.clientHeight / world.scale.y) * bounds.scale
+    const left = Math.max(0, vx)
+    const top = Math.max(0, vy)
+    const right = Math.min(MINIMAP_WIDTH, vx + vw)
+    const bottom = Math.min(MINIMAP_HEIGHT, vy + vh)
+    if (right > left && bottom > top) {
+      const touchLeft = left <= 0
+      const touchTop = top <= 0
+      const touchRight = right >= MINIMAP_WIDTH
+      const touchBottom = bottom >= MINIMAP_HEIGHT
+      pathRoundRect(minimapViewport, {
+        x: left,
+        y: top,
+        width: right - left,
+        height: bottom - top,
+        radii: {
+          tl: touchLeft && touchTop ? MINIMAP_RADIUS : 0,
+          tr: touchRight && touchTop ? MINIMAP_RADIUS : 0,
+          br: touchRight && touchBottom ? MINIMAP_RADIUS : 0,
+          bl: touchLeft && touchBottom ? MINIMAP_RADIUS : 0,
+        },
+      })
+      minimapViewport.stroke({ color: SELECTED, width: 1.5, alignment: 1 })
+    }
   }
 
   const markDimensions = (mark: Mark) => ({
@@ -439,14 +487,12 @@ export const createMap = (
     for (const mark of marks.values()) {
       if (mark.root.visible) paintBacking(mark)
     }
-    drawOverview()
     input.onSelectionChange?.([...selection])
   }
 
   const applySizes = () => {
     const local = markScale()
     for (const mark of visibleMarks) {
-      mark.generation += 1
       mark.root.scale.set(local)
       void paintMark(mark)
     }
@@ -461,6 +507,7 @@ export const createMap = (
   }
 
   const viewChanged = () => {
+    paintGrid()
     updateVisible()
     scheduleMinimap()
     if (persistTimer !== undefined) clearTimeout(persistTimer)
@@ -479,7 +526,7 @@ export const createMap = (
     const tint =
       group === undefined ? (tag === undefined ? PLATE_FILL : tagColor(tag)) : groupColor(group)
     mark.backing.clear()
-    mark.backing.roundRect(0, 0, w, h, 12)
+    mark.backing.roundRect(0, 0, w, h, theme.radius.md)
     mark.backing.fill({
       color: tint,
       alpha: group === undefined && tag === undefined ? 1 : 0.42,
@@ -496,43 +543,48 @@ export const createMap = (
     mark.root.alpha = highlight !== undefined && !highlight.has(mark.item.id) ? DIM_ALPHA : 1
   }
 
-  drawOverview = () => {
-    overview.clear()
-    overview.visible = world.scale.x < OVERVIEW_ZOOM
-    if (!overview.visible) return
-    const stride = Math.max(1, Math.ceil(marks.size / OVERVIEW_MARKS_MAX))
-    let index = 0
-    for (const mark of marks.values()) {
-      const selected = selection.has(mark.item.id)
-      const keep = selected || index % stride === 0
-      index += 1
-      if (!keep) continue
-      const group = groups?.get(mark.item.id)
-      const tag = tagOverlay ? overlayTag(mark.item.tags) : undefined
-      const color = selected
-        ? SELECTED
-        : group === undefined
-          ? tag === undefined
-            ? PLATE_FILL
-            : tagColor(tag)
-          : groupColor(group)
-      const height = "still" in mark.item ? MEDIA_HEIGHT + 64 : TEXT_CARD_HEIGHT
-      overview.roundRect(
-        mark.worldX - CARD_WIDTH / 2,
-        mark.worldY - height / 2,
-        CARD_WIDTH,
-        height,
-        9,
-      )
-      overview.fill({
-        color,
-        alpha: highlight !== undefined && !highlight.has(mark.item.id) ? DIM_ALPHA : 0.8,
-      })
-      overview.stroke({
-        color: selected ? SELECTED : PLATE_LINE,
-        width: selected ? 4 : 1.5,
+  const paintGrid = () => {
+    if (!ready) return
+    const zoom = world.scale.x
+    if (zoom <= 0) return
+    let step = Math.max(spread / GRID_DIV, 1)
+    while (step * zoom < 16) step *= 2
+    while (step * zoom > 64 && step > 1) step /= 2
+    const width = host.clientWidth
+    const height = host.clientHeight
+    const worldLeft = -world.x / zoom
+    const worldTop = -world.y / zoom
+    const worldRight = (width - world.x) / zoom
+    const worldBottom = (height - world.y) / zoom
+    const startX = Math.floor(worldLeft / step) * step
+    const startY = Math.floor(worldTop / step) * step
+    grid.clear()
+    for (let x = startX; x <= worldRight; x += step) {
+      const axis = Math.abs(x) < step * 0.5
+      const major = Math.round(x / step) % GRID_DIV === 0
+      const screenX = world.x + x * zoom
+      grid.moveTo(screenX, 0)
+      grid.lineTo(screenX, height)
+      grid.stroke({
+        color: axis ? GRID_AXIS : major ? GRID_MAJOR : GRID_MINOR,
+        width: axis ? 1.5 : 1,
+        alpha: axis ? 0.55 : major ? 0.45 : 0.32,
       })
     }
+    for (let y = startY; y <= worldBottom; y += step) {
+      const axis = Math.abs(y) < step * 0.5
+      const major = Math.round(y / step) % GRID_DIV === 0
+      const screenY = world.y + y * zoom
+      grid.moveTo(0, screenY)
+      grid.lineTo(width, screenY)
+      grid.stroke({
+        color: axis ? GRID_AXIS : major ? GRID_MAJOR : GRID_MINOR,
+        width: axis ? 1.5 : 1,
+        alpha: axis ? 0.55 : major ? 0.45 : 0.32,
+      })
+    }
+    grid.rect(world.x - 3, world.y - 3, 6, 6)
+    grid.fill({ color: ORIGIN, alpha: 0.7 })
   }
 
   const loadTexture = async (url: string): Promise<Texture | undefined> => {
@@ -554,7 +606,7 @@ export const createMap = (
   }
 
   const paintMark = async (mark: Mark) => {
-    if (!("still" in mark.item) || !mark.root.visible || world.scale.x < OVERVIEW_ZOOM) return
+    if (!("still" in mark.item) || !mark.root.visible) return
     const generation = mark.generation
     const rung = pickRung(CARD_WIDTH * world.scale.x * markScale() * (window.devicePixelRatio || 1))
     if (mark.rung === rung && mark.sprite !== undefined) return
@@ -595,17 +647,12 @@ export const createMap = (
 
   updateVisible = () => {
     if (!ready) return
-    const isOverview = world.scale.x < OVERVIEW_ZOOM
-    const overviewChanged = overview.visible !== isOverview
-    overview.visible = isOverview
-    const next = isOverview
-      ? new Set<Mark>()
-      : queryScreenRect({
-          left: -VIEW_MARGIN - CARD_WIDTH,
-          top: -VIEW_MARGIN - MEDIA_HEIGHT,
-          right: host.clientWidth + VIEW_MARGIN + CARD_WIDTH,
-          bottom: host.clientHeight + VIEW_MARGIN + MEDIA_HEIGHT,
-        })
+    const next = queryScreenRect({
+      left: -VIEW_MARGIN - CARD_WIDTH,
+      top: -VIEW_MARGIN - MEDIA_HEIGHT,
+      right: host.clientWidth + VIEW_MARGIN + CARD_WIDTH,
+      bottom: host.clientHeight + VIEW_MARGIN + MEDIA_HEIGHT,
+    })
     for (const mark of visibleMarks) {
       if (next.has(mark)) continue
       mark.root.visible = false
@@ -644,7 +691,6 @@ export const createMap = (
       applyMarkState(mark)
       void paintMark(mark)
     }
-    if (overviewChanged && isOverview) drawOverview()
   }
 
   const addMark = (placed: Placed) => {
@@ -750,7 +796,6 @@ export const createMap = (
     frameOnce()
     flushFocus()
     updateVisible()
-    drawOverview()
     drawMinimap()
   }
 
@@ -906,7 +951,7 @@ export const createMap = (
   const start = async () => {
     await app.init({
       resizeTo: host,
-      background: 0x000000,
+      background: CANVAS_BG,
       antialias: true,
       autoDensity: true,
       resolution: window.devicePixelRatio,
@@ -916,14 +961,12 @@ export const createMap = (
       return
     }
     ready = true
-    drawGrid(grid, spread)
-    world.addChildAt(grid, 0)
-    world.addChildAt(overview, 1)
     host.appendChild(app.canvas)
     app.canvas.tabIndex = 0
     app.canvas.setAttribute("aria-label", "Bookmark canvas")
     app.canvas.setAttribute("role", "application")
-    app.stage.addChild(world, marquee, minimap)
+    app.stage.addChild(grid, world, marquee, minimap)
+    paintGrid()
     world.x = host.clientWidth / 2
     world.y = host.clientHeight / 2
     minimap.on("pointerdown", (event: FederatedPointerEvent) => {
@@ -1003,6 +1046,7 @@ export const createMap = (
     resizeObserver = new ResizeObserver(() => {
       app.stage.hitArea = app.screen
       flushFocus()
+      paintGrid()
       updateVisible()
       drawMinimap()
     })
@@ -1019,7 +1063,6 @@ export const createMap = (
       if (destroyed) return
       highlight = ids
       for (const mark of marks.values()) applyMarkState(mark)
-      drawOverview()
     },
     setGroups: (map) => {
       if (destroyed) return
@@ -1027,7 +1070,6 @@ export const createMap = (
       for (const mark of marks.values()) {
         if (mark.root.visible) paintBacking(mark)
       }
-      drawOverview()
       drawMinimap()
     },
     setTagOverlay: (enabled) => {
@@ -1036,7 +1078,6 @@ export const createMap = (
       for (const mark of marks.values()) {
         if (mark.root.visible) paintBacking(mark)
       }
-      drawOverview()
       drawMinimap()
     },
     setSelection: (ids) => {

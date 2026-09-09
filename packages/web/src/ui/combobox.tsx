@@ -11,7 +11,7 @@ const styles = stylex.create({
     borderWidth: 1,
     borderStyle: "solid",
     borderColor: tokens.line,
-    borderRadius: 8,
+    borderRadius: tokens.radiusSm,
     backgroundColor: tokens.bg,
   },
   input: {
@@ -20,7 +20,7 @@ const styles = stylex.create({
     height: "100%",
     padding: "0 10px",
     borderWidth: 0,
-    borderRadius: 8,
+    borderRadius: tokens.radiusSm,
     color: tokens.ink,
     backgroundColor: "transparent",
     fontSize: 13,

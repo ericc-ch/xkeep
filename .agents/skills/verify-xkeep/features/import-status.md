@@ -14,11 +14,11 @@
 
 ## How to get to it (user POV)
 
-Open `/`. Open the app menu and choose `Import JSON`, or drop an xkeep dump anywhere on the canvas. The status pill reports ready and embedding counts. Click the status pill for import and semantic-model details.
+Open `/`. On an empty canvas, copy the snippet or choose `Import JSON` on the empty card, or drop an xkeep dump anywhere on the canvas (including the empty card). After the pile has rows, Copy snippet and Import JSON stay in the app menu. The status pill appears at the top right only while import or embedding work is pending. Import counts sit on the empty-canvas card or in the app menu.
 
 ## Driving it with native E2E
 
-Run `nub run test:e2e:built`. The native browser test covers drag/drop and file-picker imports, notices, ready/model status, SSE-driven embedding refresh, and tombstone skips. The HTTP suite covers import/update counts and embedding completion without network access.
+Run `nub run test:e2e:built`. The native browser test covers drag/drop and file-picker imports, app-menu import counts, a hidden idle status pill, SSE-driven embedding refresh, and tombstone skips. The HTTP suite covers import/update counts and embedding completion without network access.
 
 ## Promotion Criteria
 

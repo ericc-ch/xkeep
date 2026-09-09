@@ -12,11 +12,11 @@ Subject: Figma-like canvas UI. A compact floating top bar centered near the top 
 
 Canvas card system: media bookmarks are image-dominant compact cards with a thin footer showing handle and one short text line. Text-only bookmarks are compact X-post-style cards with avatar, handle, and two or three lines of text. Use plausible varied technology, design, architecture, art, cooking, and photography content—no lorem ipsum. One media card is selected with a crisp blue outline and corner handles. Several nearby related cards have subtle semantic proximity.
 
-Right inspector: fixed light-gray panel about 340px wide, titled "Bookmark". Show a believable selected post with author "Maya Chen", handle "@mayacodes", readable post text "A visual explanation of vector databases that finally clicked for me.", a tasteful abstract technical diagram image, tag chips "research" and "databases", metadata, a quoted-post block, and clear actions "Open on X" and "Delete". Include a small overflow menu. The inspector should feel like shared professional-tool chrome, not a social media feed.
+Right inspector: fixed light-gray panel about 340px wide, titled "Bookmark". Show a believable selected post with author "Maya Chen", handle "@mayacodes", readable post text "A visual explanation of vector databases that finally clicked for me.", a tasteful abstract technical diagram image, tag chips "research" and "databases", metadata, a quoted-post block, and clear actions "Open on X" and "Delete". Include a small overflow menu. The inspector should feel like a shared professional tool, not a social media feed.
 
 Style/medium: Very high fidelity modern desktop software UI, neutral studio aesthetic, precise spacing, compact professional density, crisp sans-serif typography, subtle 1px borders, small corner radii, restrained shadows, carefully aligned controls.
 
-Color palette: cool gray canvas, off-white cards and panels, charcoal typography, monochrome chrome. Reserve restrained blue for selection, muted tag colors for optional overlays, and tiny green/amber status accents. No gradients.
+Color palette: cool gray canvas, off-white cards and panels, charcoal typography, monochrome controls. Reserve restrained blue for selection, muted tag colors for optional overlays, and tiny green/amber status accents. No gradients.
 
 Composition/framing: straight-on screenshot, no device frame, no perspective. 16:10 landscape. Full application visible. Canvas takes most of the width; right inspector is clearly distinct.
 
@@ -26,4 +26,4 @@ Text (verbatim): "xkeep"; "Search the canvas"; "Filters"; "Tags"; "Clusters"; "B
 
 Constraints: one single desktop screen; maintain legible UI hierarchy; show both media-led and text-led adaptive bookmark cards; selected card and right inspector must correspond; minimap must be visible; no left navigation sidebar; no dashboard widgets; no daily review queue; no Keep action; no recommendation panel.
 
-Avoid: dark theme, purple gradients, glassmorphism, giant cards, giant headings, mobile layout, rounded-pill overload, social feed layout, kanban columns, fake browser chrome, perspective mockup, decorative illustration outside the UI, unreadable microtext, lorem ipsum, cluttered dashboard.
+Avoid: dark theme, purple gradients, glassmorphism, giant cards, giant headings, mobile layout, rounded-pill overload, social feed layout, kanban columns, fake browser window frame, perspective mockup, decorative illustration outside the UI, unreadable microtext, lorem ipsum, cluttered dashboard.
